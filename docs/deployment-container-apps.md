@@ -53,6 +53,7 @@ The workflow uses Azure OIDC login. The Azure app registration `github-simplexfl
 
 ```text
 repo:symasdesign/simpleXflow:ref:refs/heads/main
+repo:symasdesign@15147370/simpleXflow@1340624403:ref:refs/heads/main
 ```
 
 The app registration is assigned the custom role `simpleXflow Container App Image Deployer` on `ca-simplexflow`. No publish profile or client secret is required.
