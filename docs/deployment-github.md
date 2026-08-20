@@ -58,13 +58,11 @@ In GitHub:
 
 ## 5. Enable the workflow
 
-Open `.github/workflows/deploy-azure-app-service.yml` and replace:
+The workflow deploys to this Azure App Service:
 
 ```text
-REPLACE_WITH_APP_SERVICE_NAME
+simplexflow
 ```
-
-with the exact Azure App Service name.
 
 Push to `main` or `master`, or run the workflow manually from the GitHub Actions tab.
 

@@ -11,7 +11,7 @@ env:
   DOTNET_VERSION: 10.0.x
   BUILD_CONFIGURATION: Release
   WEB_PROJECT: src/SimpleXflow.Web/SimpleXflow.Web.csproj
-  AZURE_WEBAPP_NAME: REPLACE_WITH_APP_SERVICE_NAME
+  AZURE_WEBAPP_NAME: simplexflow
 
 jobs:
   build:
