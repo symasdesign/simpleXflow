@@ -1,0 +1,25 @@
+@page "/"
+
+<PageTitle>Home</PageTitle>
+
+<section class="home-hero">
+    <div>
+        <span class="eyebrow">simpleXflow</span>
+        <h1>Tenant-aware process modeling for teams.</h1>
+        <p>
+            A Blazor WebApp foundation for authenticated users, isolated tenant data,
+            and browser-based BPMN workflows.
+        </p>
+        <AuthorizeView>
+            <Authorized>
+                <a class="primary-action" href="projects">Open workspace</a>
+            </Authorized>
+            <NotAuthorized>
+                <div class="action-row">
+                    <a class="primary-action" href="Account/Register">Create account</a>
+                    <a class="secondary-action" href="Account/Login">Login</a>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+</section>

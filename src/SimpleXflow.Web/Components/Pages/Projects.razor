@@ -1,0 +1,305 @@
+@page "/projects"
+@page "/projects/{ProjectId:guid}"
+@attribute [Authorize]
+
+@using Microsoft.AspNetCore.Authorization
+@using System.IO.Compression
+@using SimpleXflow.Application.Projects
+
+@inject IFlowProjectService ProjectService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Projects</PageTitle>
+
+<section class="workspace-shell">
+    <aside class="project-list">
+        <div class="panel-heading">
+            <div>
+                <span class="eyebrow">Tenant workspace</span>
+                <h1>Flows</h1>
+            </div>
+            <button type="button" class="icon-button" title="New project" @onclick="StartNewProjectAsync">+</button>
+        </div>
+
+        @if (projects.Count == 0)
+        {
+            <p class="empty-state">No projects yet.</p>
+        }
+        else
+        {
+            <nav class="project-nav" aria-label="Flow projects">
+                @foreach (var project in projects)
+                {
+                    <NavLink href="@($"projects/{project.Id}")" class="project-row">
+                        <span>@project.Name</span>
+                        <small>@project.UpdatedUtc.ToLocalTime().ToString("g")</small>
+                    </NavLink>
+                }
+            </nav>
+        }
+    </aside>
+
+    <section class="editor-panel">
+        <div class="editor-toolbar">
+            <div>
+                <span class="eyebrow">@ModeLabel</span>
+                <h2>@Title</h2>
+            </div>
+            <div class="toolbar-actions">
+                <label class="secondary-action import-action" title="Import simBPMN project">
+                    @ImportLabel
+                    <InputFile id="project-import-file" OnChange="ImportProjectAsync" accept=".bpmn,.xml,.zip" class="import-file-input" />
+                </label>
+                <button type="button" class="primary-action" @onclick="SaveAsync" disabled="@(isSaving || isImporting)">@SaveLabel</button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="status-line">@statusMessage</div>
+        }
+
+        <EditForm Model="form" OnValidSubmit="SaveAsync" class="editor-form project-meta-form">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" />
+
+            <label>
+                Name
+                <InputText @bind-Value="form.Name" class="form-control" />
+            </label>
+
+        </EditForm>
+
+        <SimpleXflowModeler ProjectName="@form.Name" Xml="@form.BpmnXml" Revision="@editorRevision" />
+    </section>
+</section>
+
+@code {
+    [Parameter]
+    public Guid? ProjectId { get; set; }
+
+    private readonly ProjectForm form = new();
+    private IReadOnlyList<ProjectSummary> projects = [];
+    private bool isSaving;
+    private bool isImporting;
+    private string? statusMessage;
+    private int editorRevision;
+    private Guid? loadedProjectId;
+
+    private string Title => ProjectId.HasValue ? form.Name : "New flow";
+
+    private string ModeLabel => ProjectId.HasValue ? "Edit project" : "Create project";
+
+    private string SaveLabel => isSaving ? "Saving..." : "Save";
+
+    private string ImportLabel => isImporting ? "Importing..." : "Import";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        projects = await ProjectService.GetProjectsAsync();
+
+        if (ProjectId is { } id)
+        {
+            var project = await ProjectService.GetProjectAsync(id);
+            if (project is null)
+            {
+                NavigationManager.NavigateTo("projects");
+                return;
+            }
+
+            form.Name = project.Name;
+            form.BpmnXml = project.BpmnXml;
+            form.LogicXml = project.LogicXml ?? "";
+
+            if (loadedProjectId != id)
+            {
+                loadedProjectId = id;
+                editorRevision++;
+            }
+        }
+        else if (string.IsNullOrWhiteSpace(form.BpmnXml))
+        {
+            PrepareNewProject();
+        }
+        else
+        {
+            loadedProjectId = null;
+        }
+    }
+
+    private void PrepareNewProject()
+    {
+        statusMessage = null;
+        form.Name = "New flow";
+        form.BpmnXml = DefaultBpmnXml;
+        form.LogicXml = "";
+        loadedProjectId = null;
+        editorRevision++;
+    }
+
+    private Task StartNewProjectAsync()
+    {
+        PrepareNewProject();
+        NavigationManager.NavigateTo("projects", replace: true);
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveAsync()
+    {
+        isSaving = true;
+        statusMessage = null;
+
+        try
+        {
+            form.BpmnXml = await JSRuntime.InvokeAsync<string>("simpleXflowEditor.getXml");
+
+            if (ProjectId is { } id)
+            {
+                await ProjectService.UpdateProjectAsync(id, new UpdateProjectRequest(form.Name, form.BpmnXml, form.LogicXml));
+                statusMessage = "Project saved.";
+            }
+            else
+            {
+                var createdProjectId = await ProjectService.CreateProjectAsync(new CreateProjectRequest(form.Name, form.BpmnXml));
+                NavigationManager.NavigateTo($"projects/{createdProjectId}");
+                return;
+            }
+
+            projects = await ProjectService.GetProjectsAsync();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ImportProjectAsync(InputFileChangeEventArgs args)
+    {
+        isImporting = true;
+        statusMessage = null;
+
+        try
+        {
+            var importedProject = await ReadImportedProjectAsync(args.File);
+            var createdProjectId = await ProjectService.CreateProjectAsync(
+                new CreateProjectRequest(importedProject.Name, importedProject.BpmnXml));
+
+            projects = await ProjectService.GetProjectsAsync();
+            statusMessage = $"Imported {importedProject.Name}.";
+            NavigationManager.NavigateTo($"projects/{createdProjectId}");
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Import failed: {ex.Message}";
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private static async Task<ImportedProject> ReadImportedProjectAsync(IBrowserFile file)
+    {
+        var extension = Path.GetExtension(file.Name);
+
+        if (extension.Equals(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            return await ReadZipProjectAsync(file);
+        }
+
+        if (!extension.Equals(".bpmn", StringComparison.OrdinalIgnoreCase)
+            && !extension.Equals(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Only .bpmn, .xml and .zip project files can be imported.");
+        }
+
+        await using var stream = file.OpenReadStream(MaxImportFileBytes);
+        using var reader = new StreamReader(stream);
+        var xml = await reader.ReadToEndAsync();
+        EnsureBpmnXml(xml);
+
+        return new ImportedProject(GetProjectName(file.Name), xml);
+    }
+
+    private static async Task<ImportedProject> ReadZipProjectAsync(IBrowserFile file)
+    {
+        await using var uploadStream = file.OpenReadStream(MaxImportFileBytes);
+        using var archiveStream = new MemoryStream();
+        await uploadStream.CopyToAsync(archiveStream);
+        archiveStream.Position = 0;
+
+        using var archive = new ZipArchive(archiveStream, ZipArchiveMode.Read);
+        var bpmnEntry = archive.Entries
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Name)
+                && Path.GetExtension(entry.Name).Equals(".bpmn", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(entry => entry.FullName.Count(character => character is '/' or '\\'))
+            .ThenBy(entry => entry.FullName.Length)
+            .FirstOrDefault()
+            ?? throw new InvalidOperationException("The zip file does not contain a .bpmn project file.");
+
+        using var entryStream = bpmnEntry.Open();
+        using var reader = new StreamReader(entryStream);
+        var xml = await reader.ReadToEndAsync();
+        EnsureBpmnXml(xml);
+
+        var projectName = string.IsNullOrWhiteSpace(Path.GetFileNameWithoutExtension(bpmnEntry.Name))
+            ? GetProjectName(file.Name)
+            : GetProjectName(bpmnEntry.Name);
+
+        return new ImportedProject(projectName, xml);
+    }
+
+    private static void EnsureBpmnXml(string xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml)
+            || (!xml.Contains("<bpmn", StringComparison.OrdinalIgnoreCase)
+                && !xml.Contains(":definitions", StringComparison.OrdinalIgnoreCase)
+                && !xml.Contains("<definitions", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException("The selected file is not a BPMN XML project.");
+        }
+    }
+
+    private static string GetProjectName(string fileName)
+    {
+        var name = Path.GetFileNameWithoutExtension(fileName).Trim();
+        return string.IsNullOrWhiteSpace(name) ? "Imported flow" : name;
+    }
+
+    private sealed class ProjectForm
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(240, MinimumLength = 2)]
+        public string Name { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.Required]
+        public string BpmnXml { get; set; } = "";
+
+        public string? LogicXml { get; set; }
+    }
+
+    private sealed record ImportedProject(string Name, string BpmnXml);
+
+    private const long MaxImportFileBytes = 20 * 1024 * 1024;
+
+    private const string DefaultBpmnXml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd" id="sample-diagram" targetNamespace="http://bpmn.io/schema/bpmn">
+          <bpmn2:process id="Process_1" isExecutable="false">
+            <bpmn2:startEvent id="StartEvent_1" />
+          </bpmn2:process>
+          <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+            <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">
+              <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1">
+                <dc:Bounds height="36.0" width="36.0" x="412.0" y="240.0" />
+              </bpmndi:BPMNShape>
+            </bpmndi:BPMNPlane>
+          </bpmndi:BPMNDiagram>
+        </bpmn2:definitions>
+        """;
+}

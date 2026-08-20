@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SimpleXflow.Application/SimpleXflow.Application.csproj" />
+    <Project Path="src/SimpleXflow.Domain/SimpleXflow.Domain.csproj" />
+    <Project Path="src/SimpleXflow.Infrastructure/SimpleXflow.Infrastructure.csproj" />
+    <Project Path="src/SimpleXflow.Web/SimpleXflow.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SimpleXflow.Domain.Tests/SimpleXflow.Domain.Tests.csproj" />
+    <Project Path="tests/SimpleXflow.Infrastructure.Tests/SimpleXflow.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

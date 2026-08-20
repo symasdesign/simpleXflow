@@ -1,0 +1,135 @@
+@inject IJSRuntime JSRuntime
+
+<div id="@HostId" class="simplexflow-editor-host">
+    <div id="content" class="simplexflow-content">
+        <div id="sidebar" class="simplexflow-sidebar">
+            <div class="panel-heading">
+                <div>
+                    <h3 id="sidebar_title">Spezifikationen</h3>
+                </div>
+                <div>
+                    <input id="search" type="search" />
+                </div>
+            </div>
+            <div class="panel-body">
+                <ul id="files"></ul>
+            </div>
+        </div>
+
+        <div class="resizer" id="horizontalResizer" data-direction="horizontal"></div>
+
+        <div class="content with-diagram simplexflow-diagram-zone" id="js-drop-zone">
+            <div class="message intro">
+                <div class="fileNameInput">
+                    <label for="filename">Name: </label>
+                    <input type="text" id="filename" value="@ProjectName">
+                    <label>.bpmn</label>
+                    <div>
+                        <button id="js-create-diagram" type="submit">Erstellen</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="middle" class="simplexflow-middle">
+                <div id="bpmnContent" class="simplexflow-bpmn-content">
+                    <div class="canvas" id="js-canvas"></div>
+                    <div class="resizer" id="verticalResizer" data-direction="vertical"></div>
+                    <div class="simbpmncanvas" id="js-simbpmncanvas"></div>
+                </div>
+
+                <div id="settings">
+                    <div id="language">
+                        <h1 class="settings_title" id="language_title"></h1>
+                        <div class="settings_content">
+                            <p class="settings_description" id="language_description"></p>
+                            <label for="languages" id="language_label"></label>
+                            <select id="languages">
+                                <option value="de">Deutsch</option>
+                                <option value="en">English</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div id="workspace">
+                        <h1 class="settings_title" id="workspace_title"></h1>
+                        <div class="settings_content">
+                            <p class="settings_description" id="workspace_location_description"></p>
+                            <label for="workspace_location" id="workspace_location_label"></label>
+                            <input type="text" disabled id="workspace_location">
+                            <button id="change_workspace_button"></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="bottomMenu" class="simplexflow-bottom-menu">
+                    <div id="tabswitch">
+                        <nav>
+                            <ul id="tabswitchMenu" class="tabSwitchMenu">
+                                <li class="active" id="architectureViewMenuItem">
+                                    <a><span class="menuItem">Architecture</span></a>
+                                </li>
+                                <li id="splitViewMenuItem">
+                                    <a><span class="menuItem">Split</span></a>
+                                </li>
+                                <li id="logicViewMenuItem">
+                                    <a><span class="menuItem">Logic</span></a>
+                                </li>
+                            </ul>
+                            <div class="tubelight">
+                                <div class="light-ray"></div>
+                            </div>
+                        </nav>
+                    </div>
+
+                    <div id="settingsSwitch">
+                        <nav>
+                            <ul>
+                                <li><a><span class="menuItem">Settings</span></a></li>
+                            </ul>
+                            <div class="tubelight">
+                                <div class="light-ray"></div>
+                            </div>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+
+            <div class="properties-panel-parent" id="js-properties-panel"></div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly string HostId = $"simplexflow-editor-{Guid.NewGuid():N}";
+    private bool initialized;
+    private string? loadedXml;
+    private int loadedRevision;
+
+    [Parameter]
+    public string ProjectName { get; set; } = "";
+
+    [Parameter]
+    public string Xml { get; set; } = "";
+
+    [Parameter]
+    public int Revision { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            initialized = true;
+            loadedXml = Xml;
+            loadedRevision = Revision;
+            await JSRuntime.InvokeVoidAsync("simpleXflowEditor.initialize", HostId, Xml);
+        }
+        else if (initialized && (loadedXml != Xml || loadedRevision != Revision))
+        {
+            loadedXml = Xml;
+            loadedRevision = Revision;
+            await JSRuntime.InvokeVoidAsync("simpleXflowEditor.openXml", HostId, Xml);
+        }
+    }
+}

@@ -1,0 +1,402 @@
+html, body {
+    min-height: 100%;
+    background: #f5f7f0;
+    color: #1f271b;
+    font-size: 16px !important;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    scrollbar-gutter: stable;
+}
+
+a, .btn-link {
+    color: #4f642f;
+}
+
+.btn-primary,
+.primary-action {
+    color: #fff;
+    background: #4f642f;
+    border: 1px solid #4f642f;
+}
+
+.primary-action,
+.secondary-action,
+.icon-button {
+    align-items: center;
+    border-radius: 6px;
+    display: inline-flex;
+    font-weight: 650;
+    gap: .45rem;
+    justify-content: center;
+    min-height: 2.55rem;
+    padding: .55rem .9rem;
+    text-decoration: none;
+}
+
+.primary-action:disabled {
+    opacity: .62;
+}
+
+.secondary-action {
+    background: #fff;
+    border: 1px solid #cdd8bf;
+    color: #1f271b;
+}
+
+.icon-button {
+    aspect-ratio: 1;
+    background: #fff;
+    border: 1px solid #cdd8bf;
+    color: #1f271b;
+    font-size: 1.25rem;
+    padding: 0;
+    width: 2.5rem;
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #8fa85d;
+}
+
+.app-content {
+    padding-top: 1.1rem;
+}
+
+h1:focus {
+    outline: none;
+}
+
+.valid.modified:not([type=checkbox]) {
+    outline: 1px solid #6f853d;
+}
+
+.invalid {
+    outline: 1px solid #e50000;
+}
+
+.validation-message {
+    color: #e50000;
+}
+
+.blazor-error-boundary {
+    background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZ2h0PSI0OSIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMCkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMzUgLTUxKSI+PHBhdGggZD0iTTI2My41MDYgNTFDMjY0LjcxNyA1MSAyNjUuODEzIDUxLjQ4MzcgMjY2LjYwNiA1Mi4yNjU4TDI2Ny4wNTIgNTIuNzk4NyAyNjcuNTM5IDUzLjYyODMgMjkwLjE4NSA5Mi4xODMxIDI5MC41NDUgOTIuNzk1IDI5MC42NTYgOTIuOTk2QzI5MC44NzcgOTMuNTEzIDI5MSA5NC4wODE1IDI5MSA5NC42NzgyIDI5MSA5Ny4wNjUxIDI4OS4wMzggOTkgMjg2LjYxNyA5OUwyNDAuMzgzIDk5QzIzNy45NjMgOTkgMjM2IDk3LjA2NTEgMjM2IDk0LjY3ODIgMjM2IDk0LjM3OTkgMjM2LjAzMSA5NC4wODg2IDIzNi4wODkgOTMuODA3MkwyMzYuMzM4IDkzLjAxNjIgMjM2Ljg1OCA5Mi4xMzE0IDI1OS40NzMgNTMuNjI5NCAyNTkuOTYxIDUyLjc5ODUgMjYwLjQwNyA1Mi4yNjU4QzI2MS4yIDUxLjQ4MzcgMjYyLjI5NiA1MSAyNjMuNTA2IDUxWk0yNjMuNTg2IDY2LjAxODNDMjYwLjczNyA2Ni4wMTgzIDI1OS4zMTMgNjcuMTI0NSAyNTkuMzEzIDY5LjMzNyAyNTkuMzEzIDY5LjYxMDIgMjU5LjMzMiA2OS44NjA4IDI1OS4zNzEgNzAuMDg4N0wyNjEuNzk1IDg0LjAxNjEgMjY1LjM4IDg0LjAxNjEgMjY3LjgyMSA2OS43NDc1QzI2Ny44NiA2OS43MzA5IDI2Ny44NzkgNjkuNTg3NyAyNjcuODc5IDY5LjMxNzkgMjY3Ljg3OSA2Ny4xMTgyIDI2Ni40NDggNjYuMDE4MyAyNjMuNTg2IDY2LjAxODNaTTI2My41NzYgODYuMDU0N0MyNjEuMDQ5IDg2LjA1NDcgMjU5Ljc4NiA4Ny4zMDA1IDI1OS43ODYgODkuNzkyMSAyNTkuNzg2IDkyLjI4MzcgMjYxLjA0OSA5My41Mjk1IDI2My41NzYgOTMuNTI5NSAyNjYuMTE2IDkzLjUyOTUgMjY3LjM4NyA5Mi4yODM3IDI2Ny4zODcgODkuNzkyMSAyNjcuMzg3IDg3LjMwMDUgMjY2LjExNiA4Ni4wNTQ3IDI2My41NzYgODYuMDU0N1oiIGZpbGw9IiNGRkU1MDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=) no-repeat 1rem/1.8rem, #b32121;
+    padding: 1rem 1rem 1rem 3.7rem;
+    color: white;
+}
+
+    .blazor-error-boundary::after {
+        content: "An error has occurred."
+    }
+
+.darker-border-checkbox.form-check-input {
+    border-color: #929292;
+}
+
+.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
+    color: var(--bs-secondary-color);
+    text-align: end;
+}
+
+.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
+    text-align: start;
+}
+
+.home-hero {
+    align-items: center;
+    display: flex;
+    min-height: calc(100vh - 7rem);
+    max-width: 820px;
+}
+
+.home-hero h1 {
+    font-size: 3rem;
+    line-height: 1.05;
+    margin: .35rem 0 1rem;
+}
+
+.home-hero p {
+    color: #5a6570;
+    font-size: 1.1rem;
+    max-width: 640px;
+}
+
+.action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-top: 1.4rem;
+}
+
+.eyebrow {
+    color: #5f7042;
+    display: block;
+    font-size: .76rem;
+    font-weight: 750;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.workspace-shell {
+    display: grid;
+    font-size: .875rem;
+    gap: 1rem;
+    grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+    height: calc(100vh - 5.25rem);
+    min-height: 0;
+    width: 100%;
+}
+
+.project-list,
+.editor-panel {
+    background: #fff;
+    border: 1px solid #dce5d1;
+    border-radius: 8px;
+}
+
+.project-list {
+    overflow: hidden;
+}
+
+.panel-heading,
+.editor-toolbar {
+    align-items: center;
+    border-bottom: 1px solid #e7eddf;
+    display: flex;
+    justify-content: space-between;
+    padding: 1rem;
+}
+
+.toolbar-actions {
+    align-items: center;
+    display: flex;
+    gap: .55rem;
+}
+
+.import-action {
+    cursor: pointer;
+    margin: 0;
+    position: relative;
+}
+
+.import-file-input {
+    height: 1px;
+    opacity: 0;
+    overflow: hidden;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 1px;
+}
+
+.panel-heading h1,
+.editor-toolbar h2 {
+    font-size: 1.2rem;
+    margin: .15rem 0 0;
+}
+
+.project-nav {
+    display: flex;
+    flex-direction: column;
+}
+
+.project-row {
+    border-bottom: 1px solid #e7eddf;
+    color: #1f271b;
+    display: grid;
+    gap: .2rem;
+    padding: .85rem 1rem;
+    text-decoration: none;
+}
+
+.project-row small,
+.empty-state {
+    color: #6b7785;
+}
+
+.project-row.active,
+.project-row:hover {
+    background: #edf4e3;
+}
+
+.empty-state {
+    padding: 1rem;
+}
+
+.editor-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.editor-form {
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+}
+
+.editor-form label {
+    color: #44505c;
+    display: grid;
+    font-weight: 650;
+    gap: .4rem;
+}
+
+.xml-box {
+    font-family: "Cascadia Code", Consolas, monospace;
+    min-height: 360px;
+}
+
+.logic-box {
+    font-family: "Cascadia Code", Consolas, monospace;
+    min-height: 140px;
+}
+
+.status-line {
+    background: #edf4e3;
+    border-bottom: 1px solid #d2dfc1;
+    color: #3f4f2b;
+    padding: .75rem 1rem;
+}
+
+.project-meta-form {
+    border-bottom: 1px solid #e7eddf;
+    padding-bottom: .75rem;
+}
+
+.simplexflow-editor-host {
+    --tabSwitchSize: 1rem;
+    flex: 1;
+    font-size: 12px;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.simplexflow-editor-host #content.simplexflow-content {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    width: 100%;
+}
+
+.simplexflow-editor-host .simplexflow-sidebar,
+.simplexflow-editor-host .simplexflow-content > #horizontalResizer {
+    display: none;
+}
+
+.simplexflow-editor-host #js-drop-zone.simplexflow-diagram-zone {
+    display: grid !important;
+    flex: 1;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    height: 100%;
+    min-width: 0;
+    padding-top: 0;
+    position: relative;
+    width: 100%;
+}
+
+.simplexflow-editor-host .simplexflow-diagram-zone > .message.intro {
+    display: none;
+}
+
+.simplexflow-editor-host .simplexflow-middle {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+}
+
+.simplexflow-editor-host .simplexflow-bpmn-content {
+    display: flex !important;
+    flex-direction: column;
+    flex: 1;
+    height: auto !important;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+.simplexflow-editor-host #js-canvas,
+.simplexflow-editor-host #js-simbpmncanvas {
+    background: #fff;
+    height: 100%;
+    min-height: 0;
+    width: 100%;
+}
+
+.simplexflow-editor-host #verticalResizer {
+    background: #d8e2c9;
+    cursor: row-resize;
+    height: 6px;
+}
+
+.simplexflow-editor-host .simplexflow-bottom-menu {
+    align-items: center;
+    background: #1d2a17;
+    display: flex;
+    flex: 0 0 42px;
+    height: 42px;
+    justify-content: space-between;
+    min-height: 42px;
+    overflow: hidden;
+    padding: 0 .75rem;
+}
+
+.simplexflow-editor-host .simplexflow-bottom-menu nav {
+    margin-left: 0;
+    overflow: visible;
+}
+
+.simplexflow-editor-host .simplexflow-bottom-menu nav ul {
+    align-items: center;
+    display: flex;
+    gap: .35rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.simplexflow-editor-host .simplexflow-bottom-menu li {
+    align-items: center;
+    border-radius: 6px;
+    color: #dbe4ec;
+    cursor: pointer;
+    display: inline-flex;
+    height: 32px;
+    justify-content: center;
+    padding: .45rem .7rem;
+    width: auto;
+}
+
+.simplexflow-editor-host .simplexflow-bottom-menu li.active,
+.simplexflow-editor-host .simplexflow-bottom-menu li:hover {
+    background: #2d3a45;
+    color: #fff;
+}
+
+.simplexflow-editor-host .properties-panel-parent {
+    border-left: 1px solid #dce5d1;
+    height: 100%;
+    min-height: 0;
+    overflow: auto;
+    width: 400px;
+}
+
+.djs-palette {
+    border-radius: 6px;
+}
+
+.bpp-properties-panel {
+    border: 0;
+}
+
+@media (max-width: 860px) {
+    .home-hero h1 {
+        font-size: 2.2rem;
+    }
+
+    .workspace-shell {
+        grid-template-columns: 1fr;
+    }
+}

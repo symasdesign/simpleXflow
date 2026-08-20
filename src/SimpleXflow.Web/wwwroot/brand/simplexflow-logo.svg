@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 112" role="img" aria-labelledby="title desc">
+  <title id="title">simpleXflow</title>
+  <desc id="desc">simpleXflow logo with an olive green process-flow mark and wordmark.</desc>
+  <defs>
+    <linearGradient id="leaf" x1="17" y1="15" x2="95" y2="97" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c6d7a0" />
+      <stop offset=".48" stop-color="#6f853d" />
+      <stop offset="1" stop-color="#3f4f2b" />
+    </linearGradient>
+    <linearGradient id="ink" x1="20" y1="20" x2="92" y2="92" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#314323" />
+      <stop offset="1" stop-color="#172416" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="104" height="104" rx="24" fill="#f5f7f0" />
+  <path d="M30 72c13 0 19-32 35-32h20" fill="none" stroke="url(#leaf)" stroke-width="12" stroke-linecap="round" />
+  <path d="M30 40c13 0 19 32 35 32h20" fill="none" stroke="url(#ink)" stroke-width="12" stroke-linecap="round" />
+  <circle cx="28" cy="40" r="10" fill="#f5f7f0" stroke="#314323" stroke-width="7" />
+  <circle cx="28" cy="72" r="10" fill="#f5f7f0" stroke="#6f853d" stroke-width="7" />
+  <rect x="78" y="30" width="24" height="24" rx="7" fill="#f5f7f0" stroke="#314323" stroke-width="7" />
+  <rect x="78" y="60" width="24" height="24" rx="7" fill="#f5f7f0" stroke="#3f4f2b" stroke-width="7" />
+  <text x="132" y="67" fill="#f5f7f0" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="43" font-weight="760">simple</text>
+  <text x="265" y="67" fill="#c6d7a0" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="43" font-weight="820">X</text>
+  <text x="299" y="67" fill="#f5f7f0" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="43" font-weight="760">flow</text>
+  <text x="135" y="91" fill="#dce8cf" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="650" letter-spacing="1.8">MODEL / SIMULATE / DECIDE</text>
+</svg>
