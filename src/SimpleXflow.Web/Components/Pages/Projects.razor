@@ -232,6 +232,7 @@
             else
             {
                 var createdProjectId = await ProjectService.CreateProjectAsync(new CreateProjectRequest(form.Name, form.BpmnXml));
+                statusMessage = editorReadWarning ?? "Project saved.";
                 NavigationManager.NavigateTo($"projects/{createdProjectId}");
                 return;
             }

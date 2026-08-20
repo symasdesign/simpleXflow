@@ -15,6 +15,14 @@ public sealed class TenantTests
     }
 
     [Fact]
+    public void CreateSlug_NormalizesLikeTenantCreation()
+    {
+        var slug = Tenant.CreateSlug("  OST Simulation Lab  ");
+
+        Assert.Equal("ost-simulation-lab", slug);
+    }
+
+    [Fact]
     public void Create_RejectsEmptyName()
     {
         Assert.Throws<ArgumentException>(() => Tenant.Create(" "));

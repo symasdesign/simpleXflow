@@ -30,6 +30,8 @@ public sealed class Tenant
 
     public static Tenant Create(string name) => new(name);
 
+    public static string CreateSlug(string name) => CreateSlugCore(NormalizeName(name));
+
     private static string NormalizeName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -40,7 +42,7 @@ public sealed class Tenant
         return name.Trim();
     }
 
-    private static string CreateSlug(string value)
+    private static string CreateSlugCore(string value)
     {
         var normalized = value.Trim().ToLowerInvariant();
         var chars = normalized.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray();
