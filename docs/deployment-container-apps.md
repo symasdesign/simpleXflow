@@ -29,6 +29,37 @@ ghcr.io/symasdesign/simplexflow:latest
 ghcr.io/symasdesign/simplexflow:<commit-sha>
 ```
 
+Pushes to `main` or `master` only build, test and publish the image. They do not deploy to Azure automatically.
+
+## Manual deployment
+
+After the image workflow is green, deploy manually from GitHub:
+
+1. Open GitHub > Actions.
+2. Select `Deploy container to Azure`.
+3. Click `Run workflow`.
+4. Use `latest` for the newest successful build, or paste a full commit SHA for a deterministic release.
+5. Open the Container App URL or custom domain after the workflow finishes.
+
+The manual deployment workflow updates this Azure Container App:
+
+```text
+Resource group: rg-simplexflow
+Container App: ca-simplexflow
+Image: ghcr.io/symasdesign/simplexflow:<selected-tag>
+```
+
+The workflow requires a GitHub Actions repository secret named `AZURE_CREDENTIALS`. Use an Azure service principal JSON with permission to update `ca-simplexflow` in `rg-simplexflow`.
+
+Manual deployment from a local Azure CLI session is also possible:
+
+```powershell
+az containerapp update `
+  --resource-group rg-simplexflow `
+  --name ca-simplexflow `
+  --image ghcr.io/symasdesign/simplexflow:latest
+```
+
 The container listens on port `8080`.
 
 For the lowest-friction Azure Container Apps setup, make the GitHub Container Registry package public after the first successful workflow run:

@@ -20,8 +20,8 @@ simpleXflow is the Blazor WebApp successor for the former Electron-based simBPMN
 - Visual simpleXflow workspace using the migrated simBPMN/bpmn-js modeler bundle
 - Architecture, split, and logic views backed by the previous Electron visualizer behavior
 - Domain and infrastructure unit tests
-- GitHub Actions pipeline for build, test, package, and Azure App Service deployment
-- Container image pipeline for Azure Container Apps migration
+- GitHub Actions pipeline for build, test, and container image publishing
+- Manual Azure Container Apps deployment workflow
 
 ## Run
 
@@ -33,8 +33,8 @@ The app creates the local SQLite database automatically on startup.
 
 ## Deploy
 
-See `docs/deployment-github.md` for the current GitHub Actions, Azure App Service, and Azure SQL Database setup.
-See `docs/deployment-container-apps.md` for the container-based Azure Container Apps path.
+See `docs/deployment-container-apps.md` for the current GitHub Actions, Azure Container Apps, and Azure SQL Database setup.
+See `docs/deployment-github.md` only for legacy App Service notes.
 
 ## Next migration steps
 

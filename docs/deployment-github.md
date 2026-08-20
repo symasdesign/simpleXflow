@@ -1,22 +1,17 @@
-# GitHub Deployment
+# Legacy Azure App Service Deployment
+
+The App Service deployment path was removed after switching simpleXflow to Azure Container Apps.
 
 Current setup:
 
 - GitHub repository for source code, issues, pull requests, and Actions.
-- Azure App Service for hosting the Blazor Web App.
-- Azure SQL Database Free for production data.
+- GitHub Actions build and publish a container image to GitHub Container Registry.
+- Azure Container Apps hosts the Blazor Web App.
+- Azure SQL Database Free remains the production database.
 
-## 1. Create the Azure App Service
+Use `docs/deployment-container-apps.md` for the active deployment path.
 
-In the Azure Portal:
-
-1. Create a Resource Group, for example `rg-simplexflow`.
-2. Create an App Service Plan.
-3. Create an App Service Web App.
-4. Choose Linux and the .NET runtime matching the project target framework.
-5. Give the app a globally unique name, for example `simplexflow`.
-
-## 2. Create the Azure SQL Database Free database
+## Azure SQL Database Free
 
 In the Azure Portal:
 
@@ -26,58 +21,24 @@ In the Azure Portal:
    - auto-pause until next month when the free limit is reached, or
    - continue with charges when the free limit is exceeded.
 4. Create or select a SQL Server for the database.
-5. Set the firewall so the App Service can connect.
+5. Set the firewall so the Container App can connect.
 6. Copy the ADO.NET connection string and insert the SQL admin password.
 
-## 3. Configure production settings
+For Container Apps, allow the Container App egress path to connect to the SQL Server or configure the SQL firewall accordingly.
 
-In the App Service, open Settings > Environment variables and add:
+## Production settings
+
+In Azure Container Apps, open Settings > Environment variables and add:
 
 ```text
 Database__Provider=SqlServer
 ConnectionStrings__DefaultConnection=<Azure SQL ADO.NET connection string>
 ASPNETCORE_ENVIRONMENT=Production
+DataProtection__KeyPath=/tmp/simplexflow/DataProtectionKeys
 ```
 
-App Service environment variables override `appsettings.json`, so local development can keep using SQLite.
-
-## 4. Add the GitHub secret
-
-In Azure App Service:
-
-1. Open Overview.
-2. Download the publish profile.
-3. Copy the full file contents.
-
-In GitHub:
-
-1. Open the repository.
-2. Go to Settings > Secrets and variables > Actions.
-3. Create a repository secret named `AZURE_WEBAPP_PUBLISH_PROFILE`.
-4. Paste the publish profile contents as the value.
-
-## 5. Enable the workflow
-
-The workflow deploys to this Azure App Service:
-
-```text
-simplexflow
-```
-
-The workflow checks this production URL after deployment:
-
-```text
-https://simplexflow-c7b7bmf9h9ene3by.switzerlandnorth-01.azurewebsites.net
-```
-
-Push to `main` or `master`, or run the workflow manually from the GitHub Actions tab.
+Azure environment variables override `appsettings.json`, so local development can keep using SQLite.
 
 ## Notes
 
-Publish profiles are the quickest setup. For stricter production security, replace the publish profile with Azure OpenID Connect later.
-
-For custom domains without moving to an expensive always-on App Service plan, prefer the container path in `docs/deployment-container-apps.md`.
-
 The app creates the database schema on startup with EF Core `EnsureCreatedAsync()`. That keeps the first prototype easy to deploy. Before heavier production use, switch to EF Core migrations so database changes are versioned.
-
-After deployment, the workflow recycles the Windows App Service process through Kudu and waits until the app responds. That catches failed startups in GitHub Actions instead of leaving them hidden behind an Azure `HTTP Error 500.30` page.
