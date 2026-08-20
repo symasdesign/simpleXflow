@@ -1,5 +1,6 @@
 @page "/projects"
 @page "/projects/{ProjectId:guid}"
+@rendermode InteractiveServer
 @attribute [Authorize]
 
 @using Microsoft.AspNetCore.Authorization
@@ -167,15 +168,20 @@
     {
         PrepareNewProject();
         statusMessage = "New simpleXflow project draft ready. Give it a name, model the structure, then save it.";
-        NavigationManager.NavigateTo("projects", replace: true);
+        if (ProjectId.HasValue)
+        {
+            NavigationManager.NavigateTo("projects", replace: true);
+        }
+
         return Task.CompletedTask;
     }
 
     private async Task SaveAsync()
     {
         isSaving = true;
-        statusMessage = null;
+        statusMessage = "Saving simpleXflow project...";
         editorReadWarning = null;
+        await InvokeAsync(StateHasChanged);
 
         try
         {
