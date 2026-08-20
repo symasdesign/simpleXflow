@@ -17,22 +17,22 @@
         <div class="panel-heading">
             <div>
                 <span class="eyebrow">Tenant workspace</span>
-                <h1>Flows</h1>
+                <h1>Projects</h1>
             </div>
-            <button type="button" class="icon-button" title="New project" @onclick="StartNewProjectAsync">+</button>
+            <button type="button" class="icon-button" title="New simpleXflow project" @onclick="StartNewProjectAsync">+</button>
         </div>
 
         @if (projects.Count == 0)
         {
             <div class="empty-state project-empty-state">
-                <strong>No flows yet</strong>
-                <span>Create your first BPMN flow or import an existing simBPMN project.</span>
-                <button type="button" class="secondary-action" @onclick="StartNewProjectAsync">Create first flow</button>
+                <strong>No simpleXflow projects yet</strong>
+                <span>Create your first simpleXflow project or import an existing project.</span>
+                <button type="button" class="secondary-action" @onclick="StartNewProjectAsync">Create first project</button>
             </div>
         }
         else
         {
-            <nav class="project-nav" aria-label="Flow projects">
+            <nav class="project-nav" aria-label="simpleXflow projects">
                 @foreach (var project in projects)
                 {
                     <NavLink href="@($"projects/{project.Id}")" class="project-row">
@@ -52,7 +52,7 @@
                 <p class="toolbar-help">@HelpText</p>
             </div>
             <div class="toolbar-actions">
-                <label class="secondary-action import-action" title="Import simBPMN project">
+                <label class="secondary-action import-action" title="Import simpleXflow project">
                     @ImportLabel
                     <InputFile id="project-import-file" OnChange="ImportProjectAsync" accept=".bpmn,.xml,.zip" class="import-file-input" />
                 </label>
@@ -79,7 +79,7 @@
         <div class="workflow-hint" role="status">
             <div>
                 <strong>1. Model</strong>
-                <span>Use the palette in the diagram area to add BPMN tasks, events and gateways.</span>
+                <span>Use the palette to model the architecture of the simpleXflow project.</span>
             </div>
             <div>
                 <strong>2. Configure</strong>
@@ -87,7 +87,7 @@
             </div>
             <div>
                 <strong>3. Save</strong>
-                <span>Persist the flow in this tenant workspace.</span>
+                <span>Save the simpleXflow project in this tenant workspace.</span>
             </div>
         </div>
 
@@ -108,7 +108,7 @@
     private int editorRevision;
     private Guid? loadedProjectId;
 
-    private string Title => ProjectId.HasValue ? form.Name : "New flow";
+    private string Title => ProjectId.HasValue ? form.Name : "New project";
 
     private string ModeLabel => ProjectId.HasValue ? "Edit project" : "Create project";
 
@@ -117,8 +117,8 @@
     private string ImportLabel => isImporting ? "Importing..." : "Import";
 
     private string HelpText => ProjectId.HasValue
-        ? "Edit the BPMN diagram and save your changes to this tenant workspace."
-        : "Name the flow, model the first BPMN steps, then save it to the tenant workspace.";
+        ? "Edit the simpleXflow project and save your changes to this tenant workspace."
+        : "Name the project, model the first structure, then save it to the tenant workspace.";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -156,7 +156,7 @@
     private void PrepareNewProject()
     {
         statusMessage = null;
-        form.Name = "New flow";
+        form.Name = "New project";
         form.BpmnXml = DefaultBpmnXml;
         form.LogicXml = "";
         loadedProjectId = null;
@@ -166,7 +166,7 @@
     private Task StartNewProjectAsync()
     {
         PrepareNewProject();
-        statusMessage = "New flow draft ready. Give it a name, model the BPMN diagram, then save it.";
+        statusMessage = "New simpleXflow project draft ready. Give it a name, model the structure, then save it.";
         NavigationManager.NavigateTo("projects", replace: true);
         return Task.CompletedTask;
     }
@@ -218,7 +218,7 @@
         }
         catch (Exception ex)
         {
-            editorReadWarning = $"Saved using the last known BPMN model because the visual editor did not return XML. Details: {ex.Message}";
+            editorReadWarning = $"Saved using the last known simpleXflow model because the visual editor did not return XML. Details: {ex.Message}";
         }
 
         return form.BpmnXml;
@@ -273,7 +273,7 @@
         if (!extension.Equals(".bpmn", StringComparison.OrdinalIgnoreCase)
             && !extension.Equals(".xml", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Only .bpmn, .xml and .zip project files can be imported.");
+            throw new InvalidOperationException("Only simpleXflow project files with .bpmn, .xml or .zip can be imported.");
         }
 
         await using var stream = file.OpenReadStream(MaxImportFileBytes);
@@ -298,7 +298,7 @@
             .OrderBy(entry => entry.FullName.Count(character => character is '/' or '\\'))
             .ThenBy(entry => entry.FullName.Length)
             .FirstOrDefault()
-            ?? throw new InvalidOperationException("The zip file does not contain a .bpmn project file.");
+            ?? throw new InvalidOperationException("The zip file does not contain a simpleXflow project file.");
 
         using var entryStream = bpmnEntry.Open();
         using var reader = new StreamReader(entryStream);
@@ -319,14 +319,14 @@
                 && !xml.Contains(":definitions", StringComparison.OrdinalIgnoreCase)
                 && !xml.Contains("<definitions", StringComparison.OrdinalIgnoreCase)))
         {
-            throw new InvalidOperationException("The selected file is not a BPMN XML project.");
+            throw new InvalidOperationException("The selected file is not a simpleXflow project file.");
         }
     }
 
     private static string GetProjectName(string fileName)
     {
         var name = Path.GetFileNameWithoutExtension(fileName).Trim();
-        return string.IsNullOrWhiteSpace(name) ? "Imported flow" : name;
+        return string.IsNullOrWhiteSpace(name) ? "Imported project" : name;
     }
 
     private sealed class ProjectForm

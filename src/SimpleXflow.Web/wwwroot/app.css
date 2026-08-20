@@ -347,7 +347,7 @@ h1:focus {
 }
 
 .simplexflow-editor-host:empty::before {
-    content: "Loading visual BPMN editor...";
+    content: "Loading simpleXflow editor...";
     color: #65725d;
     display: grid;
     min-height: 20rem;

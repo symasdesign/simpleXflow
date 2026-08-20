@@ -1,10 +1,10 @@
 # simpleXflow
 
-simpleXflow is the Blazor WebApp successor for the former Electron-based simBPMN visualizer.
+simpleXflow is the Blazor WebApp successor for the former Electron-based modeling tool.
 
 ## Structure
 
-- `src/SimpleXflow.Domain`: tenant and flow project domain model
+- `src/SimpleXflow.Domain`: tenant and simpleXflow project domain model
 - `src/SimpleXflow.Application`: use-case contracts and DTOs
 - `src/SimpleXflow.Infrastructure`: EF Core, Identity user, tenant context, project persistence
 - `src/SimpleXflow.Web`: Blazor UI, authentication screens, tenant registration flow
@@ -17,7 +17,7 @@ simpleXflow is the Blazor WebApp successor for the former Electron-based simBPMN
 - Tenant ID is emitted as an auth claim
 - EF Core global query filters isolate tenant-owned project data
 - SQLite locally, Azure SQL Database for shared deployments via configuration
-- Visual simpleXflow workspace using the migrated simBPMN/bpmn-js modeler bundle
+- Visual simpleXflow workspace using the migrated modeler bundle
 - Architecture, split, and logic views backed by the previous Electron visualizer behavior
 - Domain and infrastructure unit tests
 - GitHub Actions pipeline for build, test, and container image publishing
