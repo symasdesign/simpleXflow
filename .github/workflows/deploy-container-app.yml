@@ -10,11 +10,15 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 env:
   AZURE_RESOURCE_GROUP: rg-simplexflow
   AZURE_CONTAINER_APP: ca-simplexflow
   GHCR_IMAGE: ghcr.io/symasdesign/simplexflow
+  AZURE_CLIENT_ID: c84a2dc1-e98e-4946-8c68-f084e646fe10
+  AZURE_TENANT_ID: 11a68f50-2c95-46d1-b23a-4f2866f69143
+  AZURE_SUBSCRIPTION_ID: c3a51299-7014-4440-9741-1f6f9828b745
 
 jobs:
   deploy:
@@ -25,7 +29,9 @@ jobs:
     - name: Log in to Azure
       uses: azure/login@v2
       with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        client-id: ${{ env.AZURE_CLIENT_ID }}
+        tenant-id: ${{ env.AZURE_TENANT_ID }}
+        subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
     - name: Deploy image to Container Apps
       run: |

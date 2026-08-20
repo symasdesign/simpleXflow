@@ -49,7 +49,13 @@ Container App: ca-simplexflow
 Image: ghcr.io/symasdesign/simplexflow:<selected-tag>
 ```
 
-The workflow requires a GitHub Actions repository secret named `AZURE_CREDENTIALS`. Use an Azure service principal JSON with permission to update `ca-simplexflow` in `rg-simplexflow`.
+The workflow uses Azure OIDC login. The Azure app registration `github-simplexflow-deploy` trusts only this repository subject:
+
+```text
+repo:symasdesign/simpleXflow:ref:refs/heads/main
+```
+
+The app registration is assigned the custom role `simpleXflow Container App Image Deployer` on `ca-simplexflow`. No publish profile or client secret is required.
 
 Manual deployment from a local Azure CLI session is also possible:
 
