@@ -36,10 +36,10 @@
             <nav class="project-nav" aria-label="simpleXflow projects">
                 @foreach (var project in projects)
                 {
-                    <NavLink href="@($"projects/{project.Id}")" class="project-row">
+                    <button type="button" class="@GetProjectRowClass(project.Id)" @onclick="() => OpenProject(project.Id)">
                         <span>@project.Name</span>
                         <small>@project.UpdatedUtc.ToLocalTime().ToString("g")</small>
-                    </NavLink>
+                    </button>
                 }
             </nav>
         }
@@ -132,6 +132,12 @@
         ? "Edit the simpleXflow project and save your changes to this tenant workspace."
         : "Name the project, model the first structure, then save it to the tenant workspace.";
 
+    private string GetProjectRowClass(Guid projectId) =>
+        ProjectId == projectId ? "project-row active" : "project-row";
+
+    private void OpenProject(Guid projectId) =>
+        NavigationManager.NavigateTo($"projects/{projectId}", forceLoad: true);
+
     protected override async Task OnParametersSetAsync()
     {
         projects = await ProjectService.GetProjectsAsync();
@@ -181,7 +187,7 @@
         statusMessage = "New simpleXflow project draft ready. Give it a name, model the structure, then save it.";
         if (ProjectId.HasValue)
         {
-            NavigationManager.NavigateTo("projects", replace: true);
+            NavigationManager.NavigateTo("projects", forceLoad: true, replace: true);
         }
 
         return Task.CompletedTask;
@@ -233,7 +239,7 @@
             {
                 var createdProjectId = await ProjectService.CreateProjectAsync(new CreateProjectRequest(form.Name, form.BpmnXml));
                 statusMessage = editorReadWarning ?? "Project saved.";
-                NavigationManager.NavigateTo($"projects/{createdProjectId}");
+                NavigationManager.NavigateTo($"projects/{createdProjectId}", forceLoad: true);
                 return;
             }
 
@@ -292,7 +298,7 @@
 
             projects = await ProjectService.GetProjectsAsync();
             statusMessage = $"Imported {importedProject.Name}.";
-            NavigationManager.NavigateTo($"projects/{createdProjectId}");
+            NavigationManager.NavigateTo($"projects/{createdProjectId}", forceLoad: true);
         }
         catch (Exception ex)
         {
