@@ -26,7 +26,12 @@ public static class DependencyInjection
             if (databaseProvider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase)
                 || databaseProvider.Equals("AzureSql", StringComparison.OrdinalIgnoreCase))
             {
-                options.UseSqlServer(connectionString);
+                options.UseSqlServer(
+                    connectionString,
+                    sqlOptions => sqlOptions.EnableRetryOnFailure(
+                        maxRetryCount: 5,
+                        maxRetryDelay: TimeSpan.FromSeconds(10),
+                        errorNumbersToAdd: null));
                 return;
             }
 

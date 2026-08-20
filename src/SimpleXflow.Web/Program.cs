@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using SimpleXflow.Infrastructure;
 using SimpleXflow.Infrastructure.Identity;
@@ -12,6 +13,13 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -54,7 +62,11 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await dbContext.Database.EnsureCreatedAsync();
+    var logger = scope.ServiceProvider
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("DatabaseStartup");
+
+    await EnsureDatabaseCreatedAsync(dbContext, logger);
 }
 
 // Configure the HTTP request pipeline.
@@ -69,6 +81,7 @@ else
     app.UseHsts();
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+app.UseForwardedHeaders();
 app.UseHttpsRedirection();
 
 app.UseAntiforgery();
@@ -92,4 +105,30 @@ static string GetDefaultDataProtectionPath(IHostEnvironment environment)
     }
 
     return Path.Combine(environment.ContentRootPath, "Data", "DataProtectionKeys");
+}
+
+static async Task EnsureDatabaseCreatedAsync(ApplicationDbContext dbContext, ILogger logger)
+{
+    const int maxAttempts = 5;
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++)
+    {
+        try
+        {
+            await dbContext.Database.EnsureCreatedAsync();
+            return;
+        }
+        catch (Exception exception) when (attempt < maxAttempts)
+        {
+            var delay = TimeSpan.FromSeconds(attempt * 5);
+            logger.LogWarning(
+                exception,
+                "Database initialization failed on attempt {Attempt}/{MaxAttempts}. Retrying in {DelaySeconds} seconds.",
+                attempt,
+                maxAttempts,
+                delay.TotalSeconds);
+
+            await Task.Delay(delay);
+        }
+    }
 }

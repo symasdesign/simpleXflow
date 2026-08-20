@@ -1,6 +1,6 @@
 # GitHub Deployment
 
-Recommended setup:
+Current setup:
 
 - GitHub repository for source code, issues, pull requests, and Actions.
 - Azure App Service for hosting the Blazor Web App.
@@ -64,10 +64,20 @@ The workflow deploys to this Azure App Service:
 simplexflow
 ```
 
+The workflow checks this production URL after deployment:
+
+```text
+https://simplexflow-c7b7bmf9h9ene3by.switzerlandnorth-01.azurewebsites.net
+```
+
 Push to `main` or `master`, or run the workflow manually from the GitHub Actions tab.
 
 ## Notes
 
 Publish profiles are the quickest setup. For stricter production security, replace the publish profile with Azure OpenID Connect later.
 
+For custom domains without moving to an expensive always-on App Service plan, prefer the container path in `docs/deployment-container-apps.md`.
+
 The app creates the database schema on startup with EF Core `EnsureCreatedAsync()`. That keeps the first prototype easy to deploy. Before heavier production use, switch to EF Core migrations so database changes are versioned.
+
+After deployment, the workflow recycles the Windows App Service process through Kudu and waits until the app responds. That catches failed startups in GitHub Actions instead of leaving them hidden behind an Azure `HTTP Error 500.30` page.
