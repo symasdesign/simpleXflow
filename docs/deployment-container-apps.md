@@ -10,6 +10,16 @@ This is the preferred path once simpleXflow should use custom domains without pa
 - Azure SQL Database Free remains the production database.
 - Hostpoint domains point to Azure Container Apps.
 
+## Current Azure resources
+
+```text
+Resource group: rg-simplexflow
+Container Apps environment: cae-simplexflow
+Container App: ca-simplexflow
+Container App URL: https://ca-simplexflow.victoriouswave-95802155.switzerlandnorth.azurecontainerapps.io
+Image: ghcr.io/symasdesign/simplexflow:latest
+```
+
 ## Container image
 
 The image is published by `.github/workflows/container-image.yml`:
@@ -28,6 +38,8 @@ GitHub repository > Packages > simplexflow > Package settings > Change visibilit
 ```
 
 If the package must stay private, create a GitHub token with `read:packages` permission and configure it as registry credentials in Azure Container Apps.
+
+The current Azure Container App is configured with GHCR registry credentials stored as an Azure Container Apps secret.
 
 ## Required Container App settings
 
