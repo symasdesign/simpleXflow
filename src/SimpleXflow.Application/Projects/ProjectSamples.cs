@@ -13,7 +13,12 @@ public static class ProjectSamples
             "paper-mm1-queue",
             "Paper sample - M/M/1 queue",
             "Compact reference model for the M/M/1 mapping: arrivals, FIFO queue, capacity-1 server and exponential service.",
-            Mm1QueueXml)
+            Mm1QueueXml),
+        new(
+            "poster-hospital-er",
+            "Poster sample - Hospital emergency room",
+            "Hospital emergency room sample from the WinterSim poster: admission, rooms, departments, discharge and room-level treatment logic.",
+            HospitalEmergencyRoomXml)
     ];
 
     public static ProjectSample? Find(string? id) =>
@@ -235,6 +240,226 @@ public static class ProjectSamples
                 <di:waypoint x="955" y="228" />
                 <di:waypoint x="1015" y="228" />
               </bpmndi:BPMNEdge>
+            </bpmndi:BPMNPlane>
+          </bpmndi:BPMNDiagram>
+        </bpmn2:definitions>
+        """;
+
+    private const string HospitalEmergencyRoomXml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_HospitalEmergencyRoom" targetNamespace="https://simplexflow.ch/samples/wintersim2025">
+          <bpmn2:collaboration id="Collaboration_HospitalER">
+            <bpmn2:participant id="Participant_ERArchitecture" name="Hospital emergency room architecture" processRef="Process_ERArchitecture" />
+            <bpmn2:participant id="Participant_RoomLogic" name="Room logic - examination and discharge" processRef="Process_RoomLogic" />
+            <bpmn2:textAnnotation id="TextAnnotation_PatientAdmission">
+              <bpmn2:text>Patient admission: external arrival stream of patients entering check-in.</bpmn2:text>
+            </bpmn2:textAnnotation>
+            <bpmn2:textAnnotation id="TextAnnotation_PatientDischarge">
+              <bpmn2:text>Patient discharge: checked-out patients leave the emergency room system.</bpmn2:text>
+            </bpmn2:textAnnotation>
+            <bpmn2:textAnnotation id="TextAnnotation_StayOnWard">
+              <bpmn2:text>Stay on ward: patients that need inpatient care move from department to ward when a bed is available.</bpmn2:text>
+            </bpmn2:textAnnotation>
+            <bpmn2:textAnnotation id="TextAnnotation_Doctors">
+              <bpmn2:text>Doctors resource. Poster note: service time at least 25 min per patient, capacity C = 3 doctors, utilization U = lambda x S / C = 0.694.</bpmn2:text>
+            </bpmn2:textAnnotation>
+            <bpmn2:textAnnotation id="TextAnnotation_Nurses">
+              <bpmn2:text>Nurses resource used during initial treatment and examination.</bpmn2:text>
+            </bpmn2:textAnnotation>
+            <bpmn2:textAnnotation id="TextAnnotation_CleaningStaff">
+              <bpmn2:text>Cleaning staff resource used for room disinfection after treatment.</bpmn2:text>
+            </bpmn2:textAnnotation>
+            <bpmn2:association id="Association_PatientAdmission" sourceRef="TextAnnotation_PatientAdmission" targetRef="StartEvent_PatientArrives" />
+            <bpmn2:association id="Association_PatientDischarge" sourceRef="TextAnnotation_PatientDischarge" targetRef="EndEvent_PatientDischarged" />
+            <bpmn2:association id="Association_StayOnWard" sourceRef="TextAnnotation_StayOnWard" targetRef="Task_Department" />
+            <bpmn2:association id="Association_Doctors_Room" sourceRef="TextAnnotation_Doctors" targetRef="Task_Room1" />
+            <bpmn2:association id="Association_Nurses_Room" sourceRef="TextAnnotation_Nurses" targetRef="Task_Room1" />
+            <bpmn2:association id="Association_Cleaning_Room" sourceRef="TextAnnotation_CleaningStaff" targetRef="Task_Room1" />
+            <bpmn2:association id="Association_Doctors_Logic" sourceRef="TextAnnotation_Doctors" targetRef="Task_ExamDiagnosis" />
+            <bpmn2:association id="Association_Nurses_Logic" sourceRef="TextAnnotation_Nurses" targetRef="Task_InitialTreatment" />
+            <bpmn2:association id="Association_Cleaning_Logic" sourceRef="TextAnnotation_CleaningStaff" targetRef="Task_Disinfection" />
+          </bpmn2:collaboration>
+          <bpmn2:process id="Process_ERArchitecture" name="Hospital emergency room architecture" isExecutable="false">
+            <bpmn2:startEvent id="StartEvent_PatientArrives" name="Patient arrives">
+              <bpmn2:outgoing>Flow_Arrival_CheckIn</bpmn2:outgoing>
+            </bpmn2:startEvent>
+            <bpmn2:task id="Task_CheckIn" name="Check-In">
+              <bpmn2:incoming>Flow_Arrival_CheckIn</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_CheckIn_WaitingRoom</bpmn2:outgoing>
+            </bpmn2:task>
+            <bpmn2:task id="Task_WaitingRoom" name="Waiting Room">
+              <bpmn2:incoming>Flow_CheckIn_WaitingRoom</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_WaitingRoom_RoomChoice</bpmn2:outgoing>
+            </bpmn2:task>
+            <bpmn2:exclusiveGateway id="Gateway_RoomChoice" name="Assign room">
+              <bpmn2:incoming>Flow_WaitingRoom_RoomChoice</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_RoomChoice_Room1</bpmn2:outgoing>
+              <bpmn2:outgoing>Flow_RoomChoice_Room2</bpmn2:outgoing>
+              <bpmn2:outgoing>Flow_RoomChoice_Room3</bpmn2:outgoing>
+            </bpmn2:exclusiveGateway>
+            <bpmn2:task id="Task_Room1" name="Room1">
+              <bpmn2:incoming>Flow_RoomChoice_Room1</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_Room1_Join</bpmn2:outgoing>
+            </bpmn2:task>
+            <bpmn2:task id="Task_Room2" name="Room2">
+              <bpmn2:incoming>Flow_RoomChoice_Room2</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_Room2_Join</bpmn2:outgoing>
+            </bpmn2:task>
+            <bpmn2:task id="Task_Room3" name="Room3">
+              <bpmn2:incoming>Flow_RoomChoice_Room3</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_Room3_Join</bpmn2:outgoing>
+            </bpmn2:task>
+            <bpmn2:exclusiveGateway id="Gateway_AfterRoom" name="After room">
+              <bpmn2:incoming>Flow_Room1_Join</bpmn2:incoming>
+              <bpmn2:incoming>Flow_Room2_Join</bpmn2:incoming>
+              <bpmn2:incoming>Flow_Room3_Join</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_AfterRoom_Department</bpmn2:outgoing>
+              <bpmn2:outgoing>Flow_AfterRoom_CheckOut</bpmn2:outgoing>
+            </bpmn2:exclusiveGateway>
+            <bpmn2:task id="Task_Department" name="Department">
+              <bpmn2:incoming>Flow_AfterRoom_Department</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_Department_End</bpmn2:outgoing>
+            </bpmn2:task>
+            <bpmn2:task id="Task_CheckOut" name="Check-Out">
+              <bpmn2:incoming>Flow_AfterRoom_CheckOut</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_CheckOut_End</bpmn2:outgoing>
+            </bpmn2:task>
+            <bpmn2:endEvent id="EndEvent_ToWard" name="To ward">
+              <bpmn2:incoming>Flow_Department_End</bpmn2:incoming>
+            </bpmn2:endEvent>
+            <bpmn2:endEvent id="EndEvent_PatientDischarged" name="Patient discharged">
+              <bpmn2:incoming>Flow_CheckOut_End</bpmn2:incoming>
+            </bpmn2:endEvent>
+            <bpmn2:sequenceFlow id="Flow_Arrival_CheckIn" sourceRef="StartEvent_PatientArrives" targetRef="Task_CheckIn" />
+            <bpmn2:sequenceFlow id="Flow_CheckIn_WaitingRoom" sourceRef="Task_CheckIn" targetRef="Task_WaitingRoom" />
+            <bpmn2:sequenceFlow id="Flow_WaitingRoom_RoomChoice" sourceRef="Task_WaitingRoom" targetRef="Gateway_RoomChoice" />
+            <bpmn2:sequenceFlow id="Flow_RoomChoice_Room1" sourceRef="Gateway_RoomChoice" targetRef="Task_Room1" />
+            <bpmn2:sequenceFlow id="Flow_RoomChoice_Room2" sourceRef="Gateway_RoomChoice" targetRef="Task_Room2" />
+            <bpmn2:sequenceFlow id="Flow_RoomChoice_Room3" sourceRef="Gateway_RoomChoice" targetRef="Task_Room3" />
+            <bpmn2:sequenceFlow id="Flow_Room1_Join" sourceRef="Task_Room1" targetRef="Gateway_AfterRoom" />
+            <bpmn2:sequenceFlow id="Flow_Room2_Join" sourceRef="Task_Room2" targetRef="Gateway_AfterRoom" />
+            <bpmn2:sequenceFlow id="Flow_Room3_Join" sourceRef="Task_Room3" targetRef="Gateway_AfterRoom" />
+            <bpmn2:sequenceFlow id="Flow_AfterRoom_Department" sourceRef="Gateway_AfterRoom" targetRef="Task_Department" />
+            <bpmn2:sequenceFlow id="Flow_AfterRoom_CheckOut" sourceRef="Gateway_AfterRoom" targetRef="Task_CheckOut" />
+            <bpmn2:sequenceFlow id="Flow_Department_End" sourceRef="Task_Department" targetRef="EndEvent_ToWard" />
+            <bpmn2:sequenceFlow id="Flow_CheckOut_End" sourceRef="Task_CheckOut" targetRef="EndEvent_PatientDischarged" />
+          </bpmn2:process>
+          <bpmn2:process id="Process_RoomLogic" name="Room-level emergency treatment logic" isExecutable="false">
+            <bpmn2:startEvent id="StartEvent_RoomToken" name="Patient ready">
+              <bpmn2:outgoing>Flow_RoomToken_Queue</bpmn2:outgoing>
+            </bpmn2:startEvent>
+            <bpmn2:task id="Task_RoomQueue" name="Room queue">
+              <bpmn2:incoming>Flow_RoomToken_Queue</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_Queue_InitialTreatment</bpmn2:outgoing>
+            </bpmn2:task>
+            <bpmn2:task id="Task_InitialTreatment" name="Initial Treatment">
+              <bpmn2:incoming>Flow_Queue_InitialTreatment</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_Initial_Exam</bpmn2:outgoing>
+            </bpmn2:task>
+            <bpmn2:task id="Task_ExamDiagnosis" name="Examination and Diagnosis">
+              <bpmn2:incoming>Flow_Initial_Exam</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_Exam_Decision</bpmn2:outgoing>
+            </bpmn2:task>
+            <bpmn2:exclusiveGateway id="Gateway_Disposition" name="Disposition">
+              <bpmn2:incoming>Flow_Exam_Decision</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_Discharge_Path</bpmn2:outgoing>
+              <bpmn2:outgoing>Flow_ToWard_WaitBed</bpmn2:outgoing>
+            </bpmn2:exclusiveGateway>
+            <bpmn2:task id="Task_WaitBed" name="Wait for Available Bed in Ward">
+              <bpmn2:incoming>Flow_ToWard_WaitBed</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_WaitBed_CleaningJoin</bpmn2:outgoing>
+            </bpmn2:task>
+            <bpmn2:exclusiveGateway id="Gateway_CleaningJoin" name="Room available">
+              <bpmn2:incoming>Flow_Discharge_Path</bpmn2:incoming>
+              <bpmn2:incoming>Flow_WaitBed_CleaningJoin</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_CleaningJoin_Disinfection</bpmn2:outgoing>
+            </bpmn2:exclusiveGateway>
+            <bpmn2:task id="Task_Disinfection" name="Disinfection">
+              <bpmn2:incoming>Flow_CleaningJoin_Disinfection</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_Disinfection_Buffer</bpmn2:outgoing>
+            </bpmn2:task>
+            <bpmn2:task id="Task_RoomBuffer" name="Room released">
+              <bpmn2:incoming>Flow_Disinfection_Buffer</bpmn2:incoming>
+              <bpmn2:outgoing>Flow_Buffer_End</bpmn2:outgoing>
+            </bpmn2:task>
+            <bpmn2:endEvent id="EndEvent_RoomAvailable" name="Room available">
+              <bpmn2:incoming>Flow_Buffer_End</bpmn2:incoming>
+            </bpmn2:endEvent>
+            <bpmn2:textAnnotation id="TextAnnotation_RoomLogic_Default">
+              <bpmn2:text>Default patient token follows the room-level logic until the room is cleaned and released.</bpmn2:text>
+            </bpmn2:textAnnotation>
+            <bpmn2:association id="Association_RoomLogic_Default" sourceRef="TextAnnotation_RoomLogic_Default" targetRef="Task_InitialTreatment" />
+            <bpmn2:sequenceFlow id="Flow_RoomToken_Queue" sourceRef="StartEvent_RoomToken" targetRef="Task_RoomQueue" />
+            <bpmn2:sequenceFlow id="Flow_Queue_InitialTreatment" sourceRef="Task_RoomQueue" targetRef="Task_InitialTreatment" />
+            <bpmn2:sequenceFlow id="Flow_Initial_Exam" sourceRef="Task_InitialTreatment" targetRef="Task_ExamDiagnosis" />
+            <bpmn2:sequenceFlow id="Flow_Exam_Decision" sourceRef="Task_ExamDiagnosis" targetRef="Gateway_Disposition" />
+            <bpmn2:sequenceFlow id="Flow_Discharge_Path" name="Discharge" sourceRef="Gateway_Disposition" targetRef="Gateway_CleaningJoin" />
+            <bpmn2:sequenceFlow id="Flow_ToWard_WaitBed" name="To Ward" sourceRef="Gateway_Disposition" targetRef="Task_WaitBed" />
+            <bpmn2:sequenceFlow id="Flow_WaitBed_CleaningJoin" sourceRef="Task_WaitBed" targetRef="Gateway_CleaningJoin" />
+            <bpmn2:sequenceFlow id="Flow_CleaningJoin_Disinfection" sourceRef="Gateway_CleaningJoin" targetRef="Task_Disinfection" />
+            <bpmn2:sequenceFlow id="Flow_Disinfection_Buffer" sourceRef="Task_Disinfection" targetRef="Task_RoomBuffer" />
+            <bpmn2:sequenceFlow id="Flow_Buffer_End" sourceRef="Task_RoomBuffer" targetRef="EndEvent_RoomAvailable" />
+          </bpmn2:process>
+          <bpmndi:BPMNDiagram id="BPMNDiagram_HospitalER">
+            <bpmndi:BPMNPlane id="BPMNPlane_HospitalER" bpmnElement="Collaboration_HospitalER">
+              <bpmndi:BPMNShape id="Participant_ERArchitecture_di" bpmnElement="Participant_ERArchitecture" isHorizontal="true">
+                <dc:Bounds x="70" y="70" width="1030" height="360" />
+              </bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Participant_RoomLogic_di" bpmnElement="Participant_RoomLogic" isHorizontal="true">
+                <dc:Bounds x="70" y="500" width="1030" height="330" />
+              </bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="StartEvent_PatientArrives_di" bpmnElement="StartEvent_PatientArrives"><dc:Bounds x="105" y="230" width="36" height="36" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Task_CheckIn_di" bpmnElement="Task_CheckIn"><dc:Bounds x="180" y="210" width="110" height="76" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Task_WaitingRoom_di" bpmnElement="Task_WaitingRoom"><dc:Bounds x="350" y="210" width="125" height="76" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Gateway_RoomChoice_di" bpmnElement="Gateway_RoomChoice" isMarkerVisible="true"><dc:Bounds x="540" y="223" width="50" height="50" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Task_Room1_di" bpmnElement="Task_Room1"><dc:Bounds x="680" y="145" width="115" height="70" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Task_Room2_di" bpmnElement="Task_Room2"><dc:Bounds x="680" y="235" width="115" height="70" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Task_Room3_di" bpmnElement="Task_Room3"><dc:Bounds x="680" y="325" width="115" height="70" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Gateway_AfterRoom_di" bpmnElement="Gateway_AfterRoom" isMarkerVisible="true"><dc:Bounds x="880" y="248" width="50" height="50" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Task_Department_di" bpmnElement="Task_Department"><dc:Bounds x="980" y="235" width="115" height="70" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Task_CheckOut_di" bpmnElement="Task_CheckOut"><dc:Bounds x="180" y="350" width="110" height="76" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="EndEvent_ToWard_di" bpmnElement="EndEvent_ToWard"><dc:Bounds x="1145" y="252" width="36" height="36" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="EndEvent_PatientDischarged_di" bpmnElement="EndEvent_PatientDischarged"><dc:Bounds x="105" y="370" width="36" height="36" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="TextAnnotation_PatientAdmission_di" bpmnElement="TextAnnotation_PatientAdmission"><dc:Bounds x="120" y="145" width="180" height="50" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="TextAnnotation_PatientDischarge_di" bpmnElement="TextAnnotation_PatientDischarge"><dc:Bounds x="120" y="440" width="190" height="50" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="TextAnnotation_StayOnWard_di" bpmnElement="TextAnnotation_StayOnWard"><dc:Bounds x="1040" y="150" width="180" height="50" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="TextAnnotation_Doctors_di" bpmnElement="TextAnnotation_Doctors"><dc:Bounds x="760" y="25" width="150" height="60" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="TextAnnotation_Nurses_di" bpmnElement="TextAnnotation_Nurses"><dc:Bounds x="890" y="35" width="150" height="60" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="TextAnnotation_CleaningStaff_di" bpmnElement="TextAnnotation_CleaningStaff"><dc:Bounds x="1020" y="60" width="160" height="60" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="StartEvent_RoomToken_di" bpmnElement="StartEvent_RoomToken"><dc:Bounds x="105" y="645" width="36" height="36" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Task_RoomQueue_di" bpmnElement="Task_RoomQueue"><dc:Bounds x="180" y="625" width="110" height="76" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Task_InitialTreatment_di" bpmnElement="Task_InitialTreatment"><dc:Bounds x="380" y="665" width="130" height="76" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Task_ExamDiagnosis_di" bpmnElement="Task_ExamDiagnosis"><dc:Bounds x="380" y="555" width="130" height="76" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Gateway_Disposition_di" bpmnElement="Gateway_Disposition" isMarkerVisible="true"><dc:Bounds x="570" y="570" width="50" height="50" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Task_WaitBed_di" bpmnElement="Task_WaitBed"><dc:Bounds x="650" y="690" width="140" height="76" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Gateway_CleaningJoin_di" bpmnElement="Gateway_CleaningJoin" isMarkerVisible="true"><dc:Bounds x="845" y="590" width="50" height="50" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Task_Disinfection_di" bpmnElement="Task_Disinfection"><dc:Bounds x="950" y="575" width="130" height="76" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="Task_RoomBuffer_di" bpmnElement="Task_RoomBuffer"><dc:Bounds x="1130" y="575" width="130" height="76" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="EndEvent_RoomAvailable_di" bpmnElement="EndEvent_RoomAvailable"><dc:Bounds x="1315" y="595" width="36" height="36" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNShape id="TextAnnotation_RoomLogic_Default_di" bpmnElement="TextAnnotation_RoomLogic_Default"><dc:Bounds x="590" y="785" width="260" height="50" /></bpmndi:BPMNShape>
+              <bpmndi:BPMNEdge id="Flow_Arrival_CheckIn_di" bpmnElement="Flow_Arrival_CheckIn"><di:waypoint x="141" y="248" /><di:waypoint x="180" y="248" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_CheckIn_WaitingRoom_di" bpmnElement="Flow_CheckIn_WaitingRoom"><di:waypoint x="290" y="248" /><di:waypoint x="350" y="248" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_WaitingRoom_RoomChoice_di" bpmnElement="Flow_WaitingRoom_RoomChoice"><di:waypoint x="475" y="248" /><di:waypoint x="540" y="248" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_RoomChoice_Room1_di" bpmnElement="Flow_RoomChoice_Room1"><di:waypoint x="565" y="223" /><di:waypoint x="565" y="180" /><di:waypoint x="680" y="180" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_RoomChoice_Room2_di" bpmnElement="Flow_RoomChoice_Room2"><di:waypoint x="590" y="248" /><di:waypoint x="680" y="270" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_RoomChoice_Room3_di" bpmnElement="Flow_RoomChoice_Room3"><di:waypoint x="565" y="273" /><di:waypoint x="565" y="360" /><di:waypoint x="680" y="360" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_Room1_Join_di" bpmnElement="Flow_Room1_Join"><di:waypoint x="795" y="180" /><di:waypoint x="905" y="180" /><di:waypoint x="905" y="248" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_Room2_Join_di" bpmnElement="Flow_Room2_Join"><di:waypoint x="795" y="270" /><di:waypoint x="880" y="273" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_Room3_Join_di" bpmnElement="Flow_Room3_Join"><di:waypoint x="795" y="360" /><di:waypoint x="905" y="360" /><di:waypoint x="905" y="298" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_AfterRoom_Department_di" bpmnElement="Flow_AfterRoom_Department"><di:waypoint x="930" y="273" /><di:waypoint x="980" y="270" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_AfterRoom_CheckOut_di" bpmnElement="Flow_AfterRoom_CheckOut"><di:waypoint x="905" y="298" /><di:waypoint x="905" y="405" /><di:waypoint x="290" y="405" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_Department_End_di" bpmnElement="Flow_Department_End"><di:waypoint x="1095" y="270" /><di:waypoint x="1145" y="270" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_CheckOut_End_di" bpmnElement="Flow_CheckOut_End"><di:waypoint x="180" y="388" /><di:waypoint x="141" y="388" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_RoomToken_Queue_di" bpmnElement="Flow_RoomToken_Queue"><di:waypoint x="141" y="663" /><di:waypoint x="180" y="663" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_Queue_InitialTreatment_di" bpmnElement="Flow_Queue_InitialTreatment"><di:waypoint x="290" y="663" /><di:waypoint x="380" y="703" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_Initial_Exam_di" bpmnElement="Flow_Initial_Exam"><di:waypoint x="445" y="665" /><di:waypoint x="445" y="631" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_Exam_Decision_di" bpmnElement="Flow_Exam_Decision"><di:waypoint x="510" y="593" /><di:waypoint x="570" y="595" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_Discharge_Path_di" bpmnElement="Flow_Discharge_Path"><di:waypoint x="620" y="595" /><di:waypoint x="845" y="615" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_ToWard_WaitBed_di" bpmnElement="Flow_ToWard_WaitBed"><di:waypoint x="595" y="620" /><di:waypoint x="595" y="728" /><di:waypoint x="650" y="728" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_WaitBed_CleaningJoin_di" bpmnElement="Flow_WaitBed_CleaningJoin"><di:waypoint x="790" y="728" /><di:waypoint x="870" y="640" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_CleaningJoin_Disinfection_di" bpmnElement="Flow_CleaningJoin_Disinfection"><di:waypoint x="895" y="615" /><di:waypoint x="950" y="613" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_Disinfection_Buffer_di" bpmnElement="Flow_Disinfection_Buffer"><di:waypoint x="1080" y="613" /><di:waypoint x="1130" y="613" /></bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Flow_Buffer_End_di" bpmnElement="Flow_Buffer_End"><di:waypoint x="1260" y="613" /><di:waypoint x="1315" y="613" /></bpmndi:BPMNEdge>
             </bpmndi:BPMNPlane>
           </bpmndi:BPMNDiagram>
         </bpmn2:definitions>

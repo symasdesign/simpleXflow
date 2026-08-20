@@ -54,8 +54,8 @@
             </div>
             <div class="toolbar-actions">
                 <div class="sample-action">
-                    <select class="sample-select" @bind="selectedSampleId" aria-label="Paper sample">
-                        <option value="">Paper sample</option>
+                    <select class="sample-select" @bind="selectedSampleId" aria-label="Demo sample">
+                        <option value="">Demo sample</option>
                         @foreach (var sample in ProjectSamples.All)
                         {
                             <option value="@sample.Id">@sample.Name</option>
@@ -192,7 +192,7 @@
         var sample = ProjectSamples.Find(selectedSampleId);
         if (sample is null)
         {
-            statusMessage = "Select a paper sample first.";
+            statusMessage = "Select a demo sample first.";
             return Task.CompletedTask;
         }
 

@@ -22,7 +22,7 @@ The Projects page can import existing simpleXflow project files from the browser
 - `.bpmn` and `.xml` files containing BPMN definitions
 - `.zip` exports containing at least one `.bpmn` file
 
-Imported files are stored as tenant-scoped `FlowProject` records. If a project with the same name already exists for the tenant, the service appends a suffix such as `(1)` instead of failing on the unique tenant/name index.
+Imported files are stored as tenant-scoped simpleXflow project records. If a project with the same name already exists for the tenant, the service appends a suffix such as `(1)` instead of failing on the unique tenant/name index.
 
 ## Paper Samples
 
@@ -30,8 +30,9 @@ The Projects page also includes built-in paper samples. They are loaded as draft
 
 - `Paper sample - Coffee break`
 - `Paper sample - M/M/1 queue`
+- `Poster sample - Hospital emergency room`
 
-The samples are intended for the EUROSIM 2026 presentation and are documented in `docs/paper-demo.md`.
+The samples are intended for the EUROSIM 2026 presentation and supporting poster demonstrations. They are documented in `docs/paper-demo.md` and surfaced in the WebApp under `Help`.
 
 ## Conceptual Alignment
 

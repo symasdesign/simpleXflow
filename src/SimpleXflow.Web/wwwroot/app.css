@@ -134,6 +134,87 @@ h1:focus {
     text-transform: uppercase;
 }
 
+.help-shell {
+    display: grid;
+    gap: 1rem;
+    margin: 0 auto;
+    max-width: 1180px;
+}
+
+.help-hero {
+    align-items: flex-start;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 22rem;
+    padding: 2rem 0;
+}
+
+.help-hero h1 {
+    font-size: 3rem;
+    line-height: 1.05;
+    margin: .35rem 0 1rem;
+    max-width: 780px;
+}
+
+.help-hero p {
+    color: #5a6570;
+    font-size: 1.1rem;
+    max-width: 760px;
+}
+
+.help-band {
+    background: #fff;
+    border: 1px solid #dce5d1;
+    border-radius: 8px;
+    display: grid;
+    gap: 1.25rem;
+    padding: 1.25rem;
+}
+
+.help-band h2,
+.help-panel h2 {
+    font-size: 1.35rem;
+    margin: .15rem 0 .35rem;
+}
+
+.help-steps,
+.sample-doc-list {
+    display: grid;
+    gap: .85rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.help-steps article,
+.sample-doc-list article,
+.help-panel {
+    background: #f8faf4;
+    border: 1px solid #e1ead7;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.help-steps strong,
+.sample-doc-list strong {
+    color: #405525;
+    display: block;
+    margin-bottom: .4rem;
+}
+
+.help-steps p,
+.sample-doc-list p,
+.help-panel p {
+    color: #5a6570;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.help-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .workspace-shell {
     display: grid;
     font-size: .875rem;
@@ -494,6 +575,16 @@ h1:focus {
 @media (max-width: 860px) {
     .home-hero h1 {
         font-size: 2.2rem;
+    }
+
+    .help-hero h1 {
+        font-size: 2.2rem;
+    }
+
+    .help-grid,
+    .help-steps,
+    .sample-doc-list {
+        grid-template-columns: 1fr;
     }
 
     .workspace-shell {

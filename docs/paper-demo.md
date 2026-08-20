@@ -18,7 +18,7 @@ The tool demo should show simpleXflow as described in the paper:
 
 ## Built-in Samples
 
-The workspace contains two paper-oriented samples in `ProjectSamples`:
+The workspace contains three presentation-oriented samples in `ProjectSamples`:
 
 ### Paper sample - Coffee break
 
@@ -46,15 +46,29 @@ This compact reference sample supports the analytical mapping described in the p
 
 Use this sample when explaining that simpleXflow is not only a communicative process sketch, but can encode classical discrete-event simulation structures in a visually accessible way.
 
+### Poster sample - Hospital emergency room
+
+This sample reflects the emergency-room scenario from the WinterSim poster material and is useful when a richer, visually recognizable demonstration is needed:
+
+- patient admission through check-in and waiting room
+- assignment to Room1, Room2 or Room3
+- routing to department or discharge
+- room-level logic for initial treatment, examination and diagnosis
+- ward-bed wait path and room disinfection before release
+- resource annotations for doctors, nurses and cleaning staff
+
+Use this sample to show that simpleXflow can present architecture and local logic views together while keeping simulation concepts such as resources, queues, capacity and post-treatment cleanup visible.
+
 ## Demo Flow
 
 1. Log in to simpleXflow.
 2. Open `Projects`.
-3. Select `Paper sample - Coffee break` from the `Paper sample` selector.
+3. Select `Paper sample - Coffee break` from the `Demo sample` selector.
 4. Click `Load`.
 5. Explain the architecture-level entity movement and the attached assumptions.
 6. Click `Save` to persist the sample in the current tenant workspace.
 7. Repeat with `Paper sample - M/M/1 queue` if the talk needs a shorter analytical reference model.
+8. Load `Poster sample - Hospital emergency room` for the visually richer scenario and explain architecture plus room-level logic.
 
 ## Validation
 

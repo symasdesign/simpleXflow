@@ -19,6 +19,8 @@ simpleXflow is the Blazor WebApp successor for the former Electron-based modelin
 - SQLite locally, Azure SQL Database for shared deployments via configuration
 - Visual simpleXflow workspace using the migrated modeler bundle
 - Architecture, split, and logic views backed by the previous Electron visualizer behavior
+- Built-in paper and poster samples for presentation demos
+- In-app Help/Get Started page
 - Domain and infrastructure unit tests
 - GitHub Actions pipeline for build, test, and container image publishing
 - Manual Azure Container Apps deployment workflow

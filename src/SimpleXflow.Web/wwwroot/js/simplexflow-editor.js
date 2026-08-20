@@ -88,7 +88,7 @@ window.simpleXflowEditor = (() => {
         script.src = scriptUrl;
         script.async = false;
         script.onload = () => resolve();
-        script.onerror = () => reject(new Error("Could not load simBPMN editor bundle."));
+        script.onerror = () => reject(new Error("Could not load the simpleXflow editor bundle."));
         document.body.appendChild(script);
       });
     }
@@ -121,7 +121,7 @@ window.simpleXflowEditor = (() => {
 
     return new Promise((resolve, reject) => {
       const timeout = window.setTimeout(
-        () => reject(new Error("The visual BPMN editor did not respond while saving.")),
+        () => reject(new Error("The visual simpleXflow editor did not respond while saving.")),
         3000);
 
       const event = {

@@ -1,0 +1,130 @@
+@page "/help"
+
+<PageTitle>Help</PageTitle>
+
+<section class="help-shell">
+    <header class="help-hero">
+        <span class="eyebrow">simpleXflow help</span>
+        <h1>Get started with tenant-aware simpleXflow projects.</h1>
+        <p>
+            Use simpleXflow to model simulation-oriented process systems in the browser,
+            save them per tenant, and present reproducible paper examples.
+        </p>
+        <div class="action-row">
+            <a class="primary-action" href="projects" data-enhance-nav="false">Open projects</a>
+            <a class="secondary-action" href="#presentation-demo">Presentation demo</a>
+        </div>
+    </header>
+
+    <section class="help-band" aria-labelledby="get-started-title">
+        <div>
+            <span class="eyebrow">Get started</span>
+            <h2 id="get-started-title">Create or open a project</h2>
+        </div>
+        <div class="help-steps">
+            <article>
+                <strong>1. Select a project</strong>
+                <p>Open an existing tenant project from the left workspace list, or use the plus button to start a clean draft.</p>
+            </article>
+            <article>
+                <strong>2. Model visually</strong>
+                <p>Use the editor palette to add events, tasks, gateways, resources, queues, buffers and annotations.</p>
+            </article>
+            <article>
+                <strong>3. Save intentionally</strong>
+                <p>Name the project, check the visual model, then save it into the current tenant workspace.</p>
+            </article>
+        </div>
+    </section>
+
+    <section class="help-grid" aria-label="Core concepts">
+        <article class="help-panel">
+            <span class="eyebrow">Projects</span>
+            <h2>simpleXflow project files</h2>
+            <p>
+                Projects are stored as tenant-scoped records. The visual model is carried as BPMN-compatible XML so
+                older visualizer exports can still be opened while the WebApp presents them as simpleXflow projects.
+            </p>
+        </article>
+        <article class="help-panel">
+            <span class="eyebrow">Tenants</span>
+            <h2>Isolated team workspaces</h2>
+            <p>
+                Every signed-in user belongs to a tenant. Project lists, imported files and saved drafts are filtered by
+                that tenant, so presentation and team data stay separated.
+            </p>
+        </article>
+        <article class="help-panel">
+            <span class="eyebrow">Import</span>
+            <h2>Use existing files</h2>
+            <p>
+                Import `.bpmn`, `.xml` or `.zip` files from the previous visualizer. ZIP files are scanned for the first
+                project model and saved as a new simpleXflow project.
+            </p>
+        </article>
+        <article class="help-panel">
+            <span class="eyebrow">Editor</span>
+            <h2>Architecture and logic</h2>
+            <p>
+                The migrated editor keeps the architecture, split and logic views from the original tool, including the
+                properties panel and the simpleXflow-specific palette behavior.
+            </p>
+        </article>
+    </section>
+
+    <section id="presentation-demo" class="help-band" aria-labelledby="demo-title">
+        <div>
+            <span class="eyebrow">Presentation demo</span>
+            <h2 id="demo-title">Paper and poster samples</h2>
+        </div>
+        <div class="sample-doc-list">
+            <article>
+                <strong>Paper sample - Coffee break</strong>
+                <p>Use this to explain architecture-level routing, resource assumptions and the bridge from system architecture to local logic.</p>
+            </article>
+            <article>
+                <strong>Paper sample - M/M/1 queue</strong>
+                <p>Use this compact sample to connect simpleXflow notation with classical discrete-event simulation structures.</p>
+            </article>
+            <article>
+                <strong>Poster sample - Hospital emergency room</strong>
+                <p>Use this for the emergency-room scenario with admission, room assignment, treatment logic, ward routing and disinfection.</p>
+            </article>
+        </div>
+    </section>
+
+    <section class="help-grid" aria-label="Troubleshooting">
+        <article class="help-panel">
+            <span class="eyebrow">Buttons</span>
+            <h2>When nothing reacts</h2>
+            <p>
+                Refresh the page once after a deployment. The Projects page runs as an interactive Blazor Server screen;
+                after the connection is active, plus, import, load and save respond immediately.
+            </p>
+        </article>
+        <article class="help-panel">
+            <span class="eyebrow">Save</span>
+            <h2>What gets persisted</h2>
+            <p>
+                Save reads XML from the visual editor. If the editor cannot return XML, simpleXflow saves the last known
+                model and shows a warning instead of losing the draft.
+            </p>
+        </article>
+        <article class="help-panel">
+            <span class="eyebrow">Deploy</span>
+            <h2>Build first, deploy manually</h2>
+            <p>
+                Commits build and publish the container image. Production deployment is triggered manually from the GitHub
+                Actions deploy workflow.
+            </p>
+        </article>
+        <article class="help-panel">
+            <span class="eyebrow">Demo</span>
+            <h2>Recommended flow</h2>
+            <p>
+                Load a sample, explain the visual model, adapt one element, then save it. This proves import, modeling,
+                tenant storage and presentation readiness in one short sequence.
+            </p>
+        </article>
+    </section>
+</section>
