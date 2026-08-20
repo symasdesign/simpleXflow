@@ -53,6 +53,16 @@
                 <p class="toolbar-help">@HelpText</p>
             </div>
             <div class="toolbar-actions">
+                <div class="sample-action">
+                    <select class="sample-select" @bind="selectedSampleId" aria-label="Paper sample">
+                        <option value="">Paper sample</option>
+                        @foreach (var sample in ProjectSamples.All)
+                        {
+                            <option value="@sample.Id">@sample.Name</option>
+                        }
+                    </select>
+                    <button type="button" class="secondary-action" @onclick="LoadSelectedSampleAsync" disabled="@string.IsNullOrWhiteSpace(selectedSampleId)">Load</button>
+                </div>
                 <label class="secondary-action import-action" title="Import simpleXflow project">
                     @ImportLabel
                     <InputFile id="project-import-file" OnChange="ImportProjectAsync" accept=".bpmn,.xml,.zip" class="import-file-input" />
@@ -106,6 +116,7 @@
     private bool isImporting;
     private string? statusMessage;
     private string? editorReadWarning;
+    private string? selectedSampleId;
     private int editorRevision;
     private Guid? loadedProjectId;
 
@@ -168,6 +179,31 @@
     {
         PrepareNewProject();
         statusMessage = "New simpleXflow project draft ready. Give it a name, model the structure, then save it.";
+        if (ProjectId.HasValue)
+        {
+            NavigationManager.NavigateTo("projects", replace: true);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task LoadSelectedSampleAsync()
+    {
+        var sample = ProjectSamples.Find(selectedSampleId);
+        if (sample is null)
+        {
+            statusMessage = "Select a paper sample first.";
+            return Task.CompletedTask;
+        }
+
+        statusMessage = null;
+        form.Name = sample.Name;
+        form.BpmnXml = sample.BpmnXml;
+        form.LogicXml = "";
+        loadedProjectId = null;
+        editorRevision++;
+        statusMessage = $"{sample.Name} loaded as draft. Review it, adapt if needed, then save it to the tenant workspace.";
+
         if (ProjectId.HasValue)
         {
             NavigationManager.NavigateTo("projects", replace: true);

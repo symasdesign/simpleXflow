@@ -36,6 +36,10 @@ The app creates the local SQLite database automatically on startup.
 See `docs/deployment-container-apps.md` for the current GitHub Actions, Azure Container Apps, and Azure SQL Database setup.
 See `docs/deployment-github.md` only for legacy App Service notes.
 
+## Paper Demo
+
+See `docs/paper-demo.md` for the EUROSIM 2026 presentation setup and built-in paper samples.
+
 ## Next migration steps
 
 1. Replace the compatibility bundle with first-class source-based frontend bundling.

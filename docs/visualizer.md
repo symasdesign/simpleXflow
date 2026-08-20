@@ -24,6 +24,15 @@ The Projects page can import existing simpleXflow project files from the browser
 
 Imported files are stored as tenant-scoped `FlowProject` records. If a project with the same name already exists for the tenant, the service appends a suffix such as `(1)` instead of failing on the unique tenant/name index.
 
+## Paper Samples
+
+The Projects page also includes built-in paper samples. They are loaded as drafts and only become tenant data when the user saves them:
+
+- `Paper sample - Coffee break`
+- `Paper sample - M/M/1 queue`
+
+The samples are intended for the EUROSIM 2026 presentation and are documented in `docs/paper-demo.md`.
+
 ## Conceptual Alignment
 
 The WSC 2026 paper describes simpleXflow as a semiformal language based on BPMN notation with separate system architecture and system logic. It emphasizes entities, tokens, resources, queues, buffers, and time-dependent behavior. The migrated editor keeps that conceptual separation through architecture, split, and logic tabs.

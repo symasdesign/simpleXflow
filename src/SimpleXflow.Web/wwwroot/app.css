@@ -178,7 +178,25 @@ h1:focus {
 .toolbar-actions {
     align-items: center;
     display: flex;
+    flex-wrap: wrap;
     gap: .55rem;
+}
+
+.sample-action {
+    align-items: center;
+    display: inline-flex;
+    gap: .45rem;
+}
+
+.sample-select {
+    background: #fff;
+    border: 1px solid #cdd8bf;
+    border-radius: 6px;
+    color: #1f271b;
+    font: inherit;
+    min-height: 2.55rem;
+    min-width: 13rem;
+    padding: .45rem .7rem;
 }
 
 .import-action {
