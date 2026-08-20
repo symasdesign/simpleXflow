@@ -1,5 +1,16 @@
 @inject IJSRuntime JSRuntime
 
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="modeler-warning">
+        <div>
+            <strong>Visual editor is not ready</strong>
+            <span>@errorMessage</span>
+        </div>
+        <button type="button" class="secondary-action" @onclick="RetryInitializeAsync">Retry</button>
+    </div>
+}
+
 <div id="@HostId" class="simplexflow-editor-host">
     <div id="content" class="simplexflow-content">
         <div id="sidebar" class="simplexflow-sidebar">
@@ -106,6 +117,7 @@
     private bool initialized;
     private string? loadedXml;
     private int loadedRevision;
+    private string? errorMessage;
 
     [Parameter]
     public string ProjectName { get; set; } = "";
@@ -120,16 +132,52 @@
     {
         if (firstRender)
         {
-            initialized = true;
+            await InitializeEditorAsync();
+        }
+        else if (initialized && (loadedXml != Xml || loadedRevision != Revision))
+        {
+            await OpenXmlAsync();
+        }
+    }
+
+    private async Task RetryInitializeAsync()
+    {
+        initialized = false;
+        errorMessage = null;
+        await InitializeEditorAsync();
+    }
+
+    private async Task InitializeEditorAsync()
+    {
+        try
+        {
             loadedXml = Xml;
             loadedRevision = Revision;
             await JSRuntime.InvokeVoidAsync("simpleXflowEditor.initialize", HostId, Xml);
+            initialized = true;
+            errorMessage = null;
         }
-        else if (initialized && (loadedXml != Xml || loadedRevision != Revision))
+        catch (Exception ex)
+        {
+            initialized = false;
+            errorMessage = ex.Message;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task OpenXmlAsync()
+    {
+        try
         {
             loadedXml = Xml;
             loadedRevision = Revision;
             await JSRuntime.InvokeVoidAsync("simpleXflowEditor.openXml", HostId, Xml);
+            errorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            await InvokeAsync(StateHasChanged);
         }
     }
 }

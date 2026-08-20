@@ -24,7 +24,11 @@
 
         @if (projects.Count == 0)
         {
-            <p class="empty-state">No projects yet.</p>
+            <div class="empty-state project-empty-state">
+                <strong>No flows yet</strong>
+                <span>Create your first BPMN flow or import an existing simBPMN project.</span>
+                <button type="button" class="secondary-action" @onclick="StartNewProjectAsync">Create first flow</button>
+            </div>
         }
         else
         {
@@ -45,6 +49,7 @@
             <div>
                 <span class="eyebrow">@ModeLabel</span>
                 <h2>@Title</h2>
+                <p class="toolbar-help">@HelpText</p>
             </div>
             <div class="toolbar-actions">
                 <label class="secondary-action import-action" title="Import simBPMN project">
@@ -60,7 +65,7 @@
             <div class="status-line">@statusMessage</div>
         }
 
-        <EditForm Model="form" OnValidSubmit="SaveAsync" class="editor-form project-meta-form">
+        <EditForm Model="form" class="editor-form project-meta-form">
             <DataAnnotationsValidator />
             <ValidationSummary class="text-danger" />
 
@@ -71,7 +76,22 @@
 
         </EditForm>
 
-        <SimpleXflowModeler ProjectName="@form.Name" Xml="@form.BpmnXml" Revision="@editorRevision" />
+        <div class="workflow-hint" role="status">
+            <div>
+                <strong>1. Model</strong>
+                <span>Use the palette in the diagram area to add BPMN tasks, events and gateways.</span>
+            </div>
+            <div>
+                <strong>2. Configure</strong>
+                <span>Select an element to edit properties, requirements and validations.</span>
+            </div>
+            <div>
+                <strong>3. Save</strong>
+                <span>Persist the flow in this tenant workspace.</span>
+            </div>
+        </div>
+
+        <SimpleXflowModeler @key="editorRevision" ProjectName="@form.Name" Xml="@form.BpmnXml" Revision="@editorRevision" />
     </section>
 </section>
 
@@ -84,6 +104,7 @@
     private bool isSaving;
     private bool isImporting;
     private string? statusMessage;
+    private string? editorReadWarning;
     private int editorRevision;
     private Guid? loadedProjectId;
 
@@ -94,6 +115,10 @@
     private string SaveLabel => isSaving ? "Saving..." : "Save";
 
     private string ImportLabel => isImporting ? "Importing..." : "Import";
+
+    private string HelpText => ProjectId.HasValue
+        ? "Edit the BPMN diagram and save your changes to this tenant workspace."
+        : "Name the flow, model the first BPMN steps, then save it to the tenant workspace.";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -141,6 +166,7 @@
     private Task StartNewProjectAsync()
     {
         PrepareNewProject();
+        statusMessage = "New flow draft ready. Give it a name, model the BPMN diagram, then save it.";
         NavigationManager.NavigateTo("projects", replace: true);
         return Task.CompletedTask;
     }
@@ -149,15 +175,17 @@
     {
         isSaving = true;
         statusMessage = null;
+        editorReadWarning = null;
 
         try
         {
-            form.BpmnXml = await JSRuntime.InvokeAsync<string>("simpleXflowEditor.getXml");
+            ValidateForm();
+            form.BpmnXml = await GetEditorXmlOrFallbackAsync();
 
             if (ProjectId is { } id)
             {
                 await ProjectService.UpdateProjectAsync(id, new UpdateProjectRequest(form.Name, form.BpmnXml, form.LogicXml));
-                statusMessage = "Project saved.";
+                statusMessage = editorReadWarning ?? "Project saved.";
             }
             else
             {
@@ -175,6 +203,36 @@
         finally
         {
             isSaving = false;
+        }
+    }
+
+    private async Task<string> GetEditorXmlOrFallbackAsync()
+    {
+        try
+        {
+            var editorXml = await JSRuntime.InvokeAsync<string>("simpleXflowEditor.getXml");
+            if (!string.IsNullOrWhiteSpace(editorXml))
+            {
+                return editorXml;
+            }
+        }
+        catch (Exception ex)
+        {
+            editorReadWarning = $"Saved using the last known BPMN model because the visual editor did not return XML. Details: {ex.Message}";
+        }
+
+        return form.BpmnXml;
+    }
+
+    private void ValidateForm()
+    {
+        var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        var validationContext = new System.ComponentModel.DataAnnotations.ValidationContext(form);
+
+        if (!System.ComponentModel.DataAnnotations.Validator.TryValidateObject(form, validationContext, validationResults, true))
+        {
+            var message = validationResults.FirstOrDefault()?.ErrorMessage ?? "Please check the project details.";
+            throw new InvalidOperationException(message);
         }
     }
 

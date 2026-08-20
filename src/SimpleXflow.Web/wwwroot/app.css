@@ -164,6 +164,17 @@ h1:focus {
     padding: 1rem;
 }
 
+.editor-toolbar {
+    gap: 1rem;
+}
+
+.toolbar-help {
+    color: #65725d;
+    font-size: .85rem;
+    margin: .25rem 0 0;
+    max-width: 720px;
+}
+
 .toolbar-actions {
     align-items: center;
     display: flex;
@@ -220,6 +231,18 @@ h1:focus {
     padding: 1rem;
 }
 
+.project-empty-state {
+    align-items: flex-start;
+    display: flex;
+    flex-direction: column;
+    gap: .65rem;
+}
+
+.project-empty-state strong {
+    color: #1f271b;
+    font-size: .95rem;
+}
+
 .editor-panel {
     display: flex;
     flex-direction: column;
@@ -263,6 +286,57 @@ h1:focus {
     padding-bottom: .75rem;
 }
 
+.workflow-hint {
+    background: #f8faf4;
+    border-bottom: 1px solid #dce5d1;
+    display: grid;
+    gap: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.workflow-hint > div {
+    display: grid;
+    gap: .2rem;
+    min-width: 0;
+    padding: .65rem 1rem;
+}
+
+.workflow-hint > div + div {
+    border-left: 1px solid #dce5d1;
+}
+
+.workflow-hint strong {
+    color: #405525;
+    font-size: .78rem;
+    text-transform: uppercase;
+}
+
+.workflow-hint span {
+    color: #65725d;
+    font-size: .82rem;
+    line-height: 1.35;
+}
+
+.modeler-warning {
+    align-items: center;
+    background: #fff7e5;
+    border-bottom: 1px solid #ecd29d;
+    color: #604615;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding: .75rem 1rem;
+}
+
+.modeler-warning div {
+    display: grid;
+    gap: .15rem;
+}
+
+.modeler-warning span {
+    font-size: .85rem;
+}
+
 .simplexflow-editor-host {
     --tabSwitchSize: 1rem;
     flex: 1;
@@ -270,6 +344,14 @@ h1:focus {
     height: auto;
     min-height: 0;
     overflow: hidden;
+}
+
+.simplexflow-editor-host:empty::before {
+    content: "Loading visual BPMN editor...";
+    color: #65725d;
+    display: grid;
+    min-height: 20rem;
+    place-items: center;
 }
 
 .simplexflow-editor-host #content.simplexflow-content {
@@ -398,5 +480,16 @@ h1:focus {
 
     .workspace-shell {
         grid-template-columns: 1fr;
+        height: auto;
+        min-height: calc(100vh - 5.25rem);
+    }
+
+    .workflow-hint {
+        grid-template-columns: 1fr;
+    }
+
+    .workflow-hint > div + div {
+        border-left: 0;
+        border-top: 1px solid #dce5d1;
     }
 }

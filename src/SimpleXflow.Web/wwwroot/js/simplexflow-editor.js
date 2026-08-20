@@ -105,6 +105,7 @@ window.simpleXflowEditor = (() => {
 
     editorStates.set(hostId, { xml });
     emit("openXmlFile", xml);
+    host.classList.add("is-ready");
     window.markAsClean?.();
   }
 
@@ -119,7 +120,9 @@ window.simpleXflowEditor = (() => {
     await ensureBundle();
 
     return new Promise((resolve, reject) => {
-      const timeout = window.setTimeout(() => reject(new Error("Timed out while saving the diagram.")), 8000);
+      const timeout = window.setTimeout(
+        () => reject(new Error("The visual BPMN editor did not respond while saving.")),
+        3000);
 
       const event = {
         sender: {
