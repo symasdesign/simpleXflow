@@ -4,6 +4,7 @@
 @attribute [Authorize]
 
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components
 @using System.IO.Compression
 @using SimpleXflow.Application.Projects
 
@@ -102,13 +103,16 @@
             </div>
         </div>
 
-        <SimpleXflowModeler @key="editorRevision" ProjectName="@form.Name" Xml="@form.BpmnXml" Revision="@editorRevision" />
+        <SimpleXflowModeler ProjectName="@form.Name" Xml="@form.BpmnXml" Revision="@editorRevision" />
     </section>
 </section>
 
 @code {
     [Parameter]
     public Guid? ProjectId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "sample")]
+    public string? SampleId { get; set; }
 
     private readonly ProjectForm form = new();
     private IReadOnlyList<ProjectSummary> projects = [];
@@ -161,6 +165,19 @@
                 editorRevision++;
             }
         }
+        else if (!string.IsNullOrWhiteSpace(SampleId))
+        {
+            var sample = ProjectSamples.Find(SampleId);
+            if (sample is not null)
+            {
+                LoadSampleDraft(sample);
+            }
+            else if (string.IsNullOrWhiteSpace(form.BpmnXml))
+            {
+                PrepareNewProject();
+                statusMessage = "The selected demo sample was not found.";
+            }
+        }
         else if (string.IsNullOrWhiteSpace(form.BpmnXml))
         {
             PrepareNewProject();
@@ -202,20 +219,25 @@
             return Task.CompletedTask;
         }
 
-        statusMessage = null;
+        if (ProjectId.HasValue)
+        {
+            NavigationManager.NavigateTo($"projects?sample={Uri.EscapeDataString(sample.Id)}", forceLoad: true, replace: true);
+            return Task.CompletedTask;
+        }
+
+        LoadSampleDraft(sample);
+        return Task.CompletedTask;
+    }
+
+    private void LoadSampleDraft(ProjectSample sample)
+    {
         form.Name = sample.Name;
         form.BpmnXml = sample.BpmnXml;
         form.LogicXml = "";
+        selectedSampleId = sample.Id;
         loadedProjectId = null;
         editorRevision++;
         statusMessage = $"{sample.Name} loaded as draft. Review it, adapt if needed, then save it to the tenant workspace.";
-
-        if (ProjectId.HasValue)
-        {
-            NavigationManager.NavigateTo("projects", replace: true);
-        }
-
-        return Task.CompletedTask;
     }
 
     private async Task SaveAsync()
