@@ -82,6 +82,25 @@ public sealed class FlowProjectServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateProjectAsync_StoresLogicXml()
+    {
+        var tenant = Tenant.Create("Tenant A");
+        await using var setupContext = CreateContext(null);
+        await setupContext.Database.EnsureCreatedAsync();
+        setupContext.Tenants.Add(tenant);
+        await setupContext.SaveChangesAsync();
+
+        await using var tenantContext = CreateContext(tenant.Id);
+        var service = new FlowProjectService(tenantContext, new TestTenantContext(tenant.Id));
+
+        var projectId = await service.CreateProjectAsync(new CreateProjectRequest("Room logic", "<architecture />", "<logic />"));
+
+        var project = await service.GetProjectAsync(projectId);
+        Assert.NotNull(project);
+        Assert.Equal("<logic />", project.LogicXml);
+    }
+
+    [Fact]
     public async Task SaveChangesAsync_RejectsChangingDataForAnotherTenant()
     {
         var tenantA = Tenant.Create("Tenant A");

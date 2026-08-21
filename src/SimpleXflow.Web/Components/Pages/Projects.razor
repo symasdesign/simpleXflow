@@ -114,7 +114,7 @@
             </div>
         }
 
-        <SimpleXflowModeler ProjectName="@form.Name" Xml="@form.BpmnXml" Revision="@editorRevision" IsFullScreen="@isFullScreen" />
+        <SimpleXflowModeler ProjectName="@form.Name" Xml="@form.BpmnXml" LogicXml="@form.LogicXml" LogicTargetElementId="@form.LogicTargetElementId" Revision="@editorRevision" IsFullScreen="@isFullScreen" />
     </section>
 </section>
 
@@ -192,6 +192,7 @@
             form.Name = project.Name;
             form.BpmnXml = project.BpmnXml;
             form.LogicXml = project.LogicXml ?? "";
+            form.LogicTargetElementId = null;
 
             if (loadedProjectId != id)
             {
@@ -228,6 +229,7 @@
         form.Name = "New project";
         form.BpmnXml = DefaultBpmnXml;
         form.LogicXml = "";
+        form.LogicTargetElementId = null;
         loadedProjectId = null;
         editorRevision++;
     }
@@ -294,11 +296,14 @@
         pendingSample = null;
         form.Name = sample.Name;
         form.BpmnXml = sample.BpmnXml;
-        form.LogicXml = "";
+        form.LogicXml = sample.LogicXml ?? "";
+        form.LogicTargetElementId = sample.LogicTargetElementId;
         selectedSampleId = sample.Id;
         loadedProjectId = null;
         editorRevision++;
-        statusMessage = $"{sample.Name} loaded as draft. Review it, adapt if needed, then save it to the tenant workspace.";
+        statusMessage = string.IsNullOrWhiteSpace(form.LogicXml)
+            ? $"{sample.Name} loaded as draft. Review it, adapt if needed, then save it to the tenant workspace."
+            : $"{sample.Name} loaded as draft with architecture and Room1 logic. Select Room1 or open the Logic/Split view to inspect the room-level behavior.";
     }
 
     private async Task SaveAsync()
@@ -312,6 +317,7 @@
         {
             ValidateForm();
             form.BpmnXml = await GetEditorXmlOrFallbackAsync();
+            form.LogicXml = await GetEditorLogicOrFallbackAsync();
 
             if (ProjectId is { } id)
             {
@@ -320,7 +326,7 @@
             }
             else
             {
-                var createdProjectId = await ProjectService.CreateProjectAsync(new CreateProjectRequest(form.Name, form.BpmnXml));
+                var createdProjectId = await ProjectService.CreateProjectAsync(new CreateProjectRequest(form.Name, form.BpmnXml, form.LogicXml));
                 statusMessage = editorReadWarning ?? "Project saved.";
                 NavigationManager.NavigateTo($"projects/{createdProjectId}", forceLoad: true);
                 return;
@@ -356,6 +362,24 @@
         return form.BpmnXml;
     }
 
+    private async Task<string?> GetEditorLogicOrFallbackAsync()
+    {
+        try
+        {
+            var editorLogicXml = await JSRuntime.InvokeAsync<string?>("simpleXflowEditor.getLogic");
+            if (!string.IsNullOrWhiteSpace(editorLogicXml))
+            {
+                return editorLogicXml;
+            }
+        }
+        catch
+        {
+            // Logic export is best-effort because the legacy editor stores it separately from the architecture XML.
+        }
+
+        return form.LogicXml;
+    }
+
     private void ValidateForm()
     {
         var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
@@ -377,7 +401,7 @@
         {
             var importedProject = await ReadImportedProjectAsync(args.File);
             var createdProjectId = await ProjectService.CreateProjectAsync(
-                new CreateProjectRequest(importedProject.Name, importedProject.BpmnXml));
+                new CreateProjectRequest(importedProject.Name, importedProject.BpmnXml, importedProject.LogicXml));
 
             projects = await ProjectService.GetProjectsAsync();
             statusMessage = $"Imported {importedProject.Name}.";
@@ -413,7 +437,7 @@
         var xml = await reader.ReadToEndAsync();
         EnsureBpmnXml(xml);
 
-        return new ImportedProject(GetProjectName(file.Name), xml);
+        return new ImportedProject(GetProjectName(file.Name), xml, null);
     }
 
     private static async Task<ImportedProject> ReadZipProjectAsync(IBrowserFile file)
@@ -441,7 +465,7 @@
             ? GetProjectName(file.Name)
             : GetProjectName(bpmnEntry.Name);
 
-        return new ImportedProject(projectName, xml);
+        return new ImportedProject(projectName, xml, null);
     }
 
     private static void EnsureBpmnXml(string xml)
@@ -471,9 +495,11 @@
         public string BpmnXml { get; set; } = "";
 
         public string? LogicXml { get; set; }
+
+        public string? LogicTargetElementId { get; set; }
     }
 
-    private sealed record ImportedProject(string Name, string BpmnXml);
+    private sealed record ImportedProject(string Name, string BpmnXml, string? LogicXml);
 
     private const long MaxImportFileBytes = 20 * 1024 * 1024;
 

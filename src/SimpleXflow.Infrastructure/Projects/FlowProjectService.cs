@@ -46,6 +46,7 @@ public sealed class FlowProjectService(
 
         var projectName = await GetAvailableProjectNameAsync(request.Name, cancellationToken);
         var project = new FlowProject(tenantContext.TenantId, projectName, request.BpmnXml);
+        project.UpdateModel(request.BpmnXml, request.LogicXml);
         dbContext.Projects.Add(project);
         await dbContext.SaveChangesAsync(cancellationToken);
         return project.Id;

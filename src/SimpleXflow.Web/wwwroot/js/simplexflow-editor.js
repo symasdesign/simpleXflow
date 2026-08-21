@@ -3,6 +3,7 @@ window.simpleXflowEditor = (() => {
   const callbacks = new Map();
   const editorStates = new Map();
   let bundlePromise;
+  let currentLogicXml = "";
 
   function getCallbackList(name) {
     if (!callbacks.has(name)) {
@@ -38,8 +39,14 @@ window.simpleXflowEditor = (() => {
       getWorkspacePath: async () => "simpleXflow cloud workspace",
       createNewFile: async (_filename, xml) => emit("openXmlFile", xml),
       deleteFile: async () => undefined,
-      saveLogicRelay: async (xml) => emit("saveLogic", xml),
-      openLogicRelay: async (xml) => emit("openLogic", xml),
+      saveLogicRelay: async (xml) => {
+        currentLogicXml = xml ?? "";
+        emit("saveLogic", xml);
+      },
+      openLogicRelay: async (xml) => {
+        currentLogicXml = xml ?? "";
+        emit("openLogic", xml);
+      },
       adjustResourcesInLogicRelay: async (resources) => emit("adjustResourcesInLogic", resources),
       exportBPMN: async () => undefined,
       importBPMN: async () => undefined,
@@ -96,23 +103,59 @@ window.simpleXflowEditor = (() => {
     return bundlePromise;
   }
 
-  async function initialize(hostId, xml) {
+  function openLogic(logicXml) {
+    currentLogicXml = logicXml ?? "";
+
+    if (!currentLogicXml.trim()) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => emit("openLogic", currentLogicXml));
+  }
+
+  function attachLogicToElement(xml, logicXml, targetElementId) {
+    if (!xml || !logicXml?.trim() || !targetElementId?.trim()) {
+      return xml;
+    }
+
+    const escapedElementId = targetElementId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const elementPattern = new RegExp(`(<[^!?/][^>]*\\bid=["']${escapedElementId}["'][^>]*)(>)`, "i");
+    const escapedLogic = logicXml
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\r/g, "&#13;")
+      .replace(/\n/g, "&#10;")
+      .replace(/\t/g, "&#9;");
+
+    return xml.replace(elementPattern, (_match, start, end) => {
+      const withoutExistingLogic = start.replace(/\scontent=(?:"[^"]*"|'[^']*')/i, "");
+      return `${withoutExistingLogic} content="${escapedLogic}"${end}`;
+    });
+  }
+
+  async function initialize(hostId, xml, logicXml, logicTargetElementId) {
     await ensureBundle();
     const host = document.getElementById(hostId);
     if (!host) {
       return;
     }
 
-    editorStates.set(hostId, { xml });
-    emit("openXmlFile", xml);
+    const editorXml = attachLogicToElement(xml, logicXml, logicTargetElementId);
+    editorStates.set(hostId, { xml: editorXml, logicXml, logicTargetElementId });
+    emit("openXmlFile", editorXml);
+    openLogic(logicXml);
     host.classList.add("is-ready");
     window.markAsClean?.();
   }
 
-  async function openXml(hostId, xml) {
-    editorStates.set(hostId, { xml });
+  async function openXml(hostId, xml, logicXml, logicTargetElementId) {
+    const editorXml = attachLogicToElement(xml, logicXml, logicTargetElementId);
+    editorStates.set(hostId, { xml: editorXml, logicXml, logicTargetElementId });
     await ensureBundle();
-    emit("openXmlFile", xml);
+    emit("openXmlFile", editorXml);
+    openLogic(logicXml);
     window.markAsClean?.();
   }
 
@@ -137,6 +180,11 @@ window.simpleXflowEditor = (() => {
 
       emitRaw("createXmlFile", event);
     });
+  }
+
+  async function getLogic() {
+    await ensureBundle();
+    return currentLogicXml;
   }
 
   function resize(hostId) {
@@ -166,6 +214,7 @@ window.simpleXflowEditor = (() => {
     initialize,
     openXml,
     getXml,
+    getLogic,
     resize
   };
 })();

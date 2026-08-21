@@ -15,7 +15,8 @@ public sealed record ProjectDetail(
 
 public sealed record CreateProjectRequest(
     string Name,
-    string BpmnXml);
+    string BpmnXml,
+    string? LogicXml = null);
 
 public sealed record UpdateProjectRequest(
     string Name,

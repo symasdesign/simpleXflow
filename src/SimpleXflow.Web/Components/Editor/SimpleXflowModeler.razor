@@ -116,6 +116,8 @@
     private readonly string HostId = $"simplexflow-editor-{Guid.NewGuid():N}";
     private bool initialized;
     private string? loadedXml;
+    private string? loadedLogicXml;
+    private string? loadedLogicTargetElementId;
     private int loadedRevision;
     private bool loadedFullScreen;
     private string? errorMessage;
@@ -125,6 +127,12 @@
 
     [Parameter]
     public string Xml { get; set; } = "";
+
+    [Parameter]
+    public string? LogicXml { get; set; }
+
+    [Parameter]
+    public string? LogicTargetElementId { get; set; }
 
     [Parameter]
     public int Revision { get; set; }
@@ -138,7 +146,7 @@
         {
             await InitializeEditorAsync();
         }
-        else if (initialized && (loadedXml != Xml || loadedRevision != Revision))
+        else if (initialized && (loadedXml != Xml || loadedLogicXml != LogicXml || loadedLogicTargetElementId != LogicTargetElementId || loadedRevision != Revision))
         {
             await OpenXmlAsync();
         }
@@ -162,9 +170,11 @@
         try
         {
             loadedXml = Xml;
+            loadedLogicXml = LogicXml;
+            loadedLogicTargetElementId = LogicTargetElementId;
             loadedRevision = Revision;
             loadedFullScreen = IsFullScreen;
-            await JSRuntime.InvokeVoidAsync("simpleXflowEditor.initialize", HostId, Xml);
+            await JSRuntime.InvokeVoidAsync("simpleXflowEditor.initialize", HostId, Xml, LogicXml, LogicTargetElementId);
             initialized = true;
             errorMessage = null;
             await ResizeEditorAsync();
@@ -182,8 +192,10 @@
         try
         {
             loadedXml = Xml;
+            loadedLogicXml = LogicXml;
+            loadedLogicTargetElementId = LogicTargetElementId;
             loadedRevision = Revision;
-            await JSRuntime.InvokeVoidAsync("simpleXflowEditor.openXml", HostId, Xml);
+            await JSRuntime.InvokeVoidAsync("simpleXflowEditor.openXml", HostId, Xml, LogicXml, LogicTargetElementId);
             errorMessage = null;
         }
         catch (Exception ex)
