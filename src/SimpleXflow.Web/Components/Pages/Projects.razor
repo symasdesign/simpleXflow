@@ -46,66 +46,95 @@
         }
     </aside>
 
-    <section class="editor-panel">
-        <div class="editor-toolbar">
-            <div>
-                <span class="eyebrow">@ModeLabel</span>
-                <h2>@Title</h2>
-                <p class="toolbar-help">@HelpText</p>
-            </div>
-            <div class="toolbar-actions">
-                <div class="sample-action">
-                    <select class="sample-select" @bind="selectedSampleId" aria-label="Demo sample">
-                        <option value="">Demo sample</option>
-                        @foreach (var sample in ProjectSamples.All)
-                        {
-                            <option value="@sample.Id">@sample.Name</option>
-                        }
-                    </select>
-                    <button type="button" class="secondary-action" @onclick="LoadSelectedSampleAsync" disabled="@string.IsNullOrWhiteSpace(selectedSampleId)">Load</button>
-                </div>
-                <label class="secondary-action import-action" title="Import simpleXflow project">
-                    @ImportLabel
-                    <InputFile id="project-import-file" OnChange="ImportProjectAsync" accept=".bpmn,.xml,.zip" class="import-file-input" />
-                </label>
-                <button type="button" class="primary-action" @onclick="SaveAsync" disabled="@(isSaving || isImporting)">@SaveLabel</button>
-            </div>
-        </div>
-
-        @if (!string.IsNullOrWhiteSpace(statusMessage))
+    <section class="@EditorPanelClass">
+        @if (isFullScreen)
         {
-            <div class="status-line">@statusMessage</div>
+            <div class="fullscreen-action-bar">
+                <span>@form.Name</span>
+                <button type="button" class="secondary-action" @onclick="ToggleFullScreen">Exit full screen</button>
+            </div>
+        }
+        else
+        {
+            <div class="editor-toolbar">
+                <div>
+                    <span class="eyebrow">@ModeLabel</span>
+                    <h2>@Title</h2>
+                    <p class="toolbar-help">@HelpText</p>
+                </div>
+                <div class="toolbar-actions">
+                    <div class="sample-action">
+                        <select class="sample-select" @bind="selectedSampleId" aria-label="Demo sample">
+                            <option value="">Demo sample</option>
+                            @foreach (var sample in ProjectSamples.All)
+                            {
+                                <option value="@sample.Id">@sample.Name</option>
+                            }
+                        </select>
+                        <button type="button" class="secondary-action" @onclick="RequestSampleLoadAsync" disabled="@string.IsNullOrWhiteSpace(selectedSampleId)">Load</button>
+                    </div>
+                    <button type="button" class="secondary-action" @onclick="ToggleFullScreen">Full screen</button>
+                    <label class="secondary-action import-action" title="Import simpleXflow project">
+                        @ImportLabel
+                        <InputFile id="project-import-file" OnChange="ImportProjectAsync" accept=".bpmn,.xml,.zip" class="import-file-input" />
+                    </label>
+                    <button type="button" class="primary-action" @onclick="SaveAsync" disabled="@(isSaving || isImporting)">@SaveLabel</button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(statusMessage))
+            {
+                <div class="status-line">@statusMessage</div>
+            }
+
+            <EditForm Model="form" class="editor-form project-meta-form">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" />
+
+                <label>
+                    Name
+                    <InputText @bind-Value="form.Name" class="form-control" />
+                </label>
+
+            </EditForm>
+
+            <div class="workflow-hint" role="status">
+                <div>
+                    <strong>1. Model</strong>
+                    <span>Use the palette to model the architecture of the simpleXflow project.</span>
+                </div>
+                <div>
+                    <strong>2. Configure</strong>
+                    <span>Select an element to edit properties, requirements and validations.</span>
+                </div>
+                <div>
+                    <strong>3. Save</strong>
+                    <span>Save the simpleXflow project in this tenant workspace.</span>
+                </div>
+            </div>
         }
 
-        <EditForm Model="form" class="editor-form project-meta-form">
-            <DataAnnotationsValidator />
-            <ValidationSummary class="text-danger" />
-
-            <label>
-                Name
-                <InputText @bind-Value="form.Name" class="form-control" />
-            </label>
-
-        </EditForm>
-
-        <div class="workflow-hint" role="status">
-            <div>
-                <strong>1. Model</strong>
-                <span>Use the palette to model the architecture of the simpleXflow project.</span>
-            </div>
-            <div>
-                <strong>2. Configure</strong>
-                <span>Select an element to edit properties, requirements and validations.</span>
-            </div>
-            <div>
-                <strong>3. Save</strong>
-                <span>Save the simpleXflow project in this tenant workspace.</span>
-            </div>
-        </div>
-
-        <SimpleXflowModeler ProjectName="@form.Name" Xml="@form.BpmnXml" Revision="@editorRevision" />
+        <SimpleXflowModeler ProjectName="@form.Name" Xml="@form.BpmnXml" Revision="@editorRevision" IsFullScreen="@isFullScreen" />
     </section>
 </section>
+
+@if (pendingSample is not null)
+{
+    <div class="confirmation-backdrop" role="presentation">
+        <div class="confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="replace-sample-title">
+            <span class="eyebrow">Load demo sample</span>
+            <h2 id="replace-sample-title">Replace current model?</h2>
+            <p>
+                Loading <strong>@pendingSample.Name</strong> replaces the model currently shown in the editor.
+                Existing saved projects are only changed if you press Save afterwards.
+            </p>
+            <div class="confirmation-actions">
+                <button type="button" class="secondary-action" @onclick="CancelSampleLoad">Cancel</button>
+                <button type="button" class="primary-action" @onclick="ConfirmSampleLoadAsync">Replace model</button>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     [Parameter]
@@ -121,6 +150,8 @@
     private string? statusMessage;
     private string? editorReadWarning;
     private string? selectedSampleId;
+    private ProjectSample? pendingSample;
+    private bool isFullScreen;
     private int editorRevision;
     private Guid? loadedProjectId;
 
@@ -135,6 +166,9 @@
     private string HelpText => ProjectId.HasValue
         ? "Edit the simpleXflow project and save your changes to this tenant workspace."
         : "Name the project, model the first structure, then save it to the tenant workspace.";
+
+    private string EditorPanelClass =>
+        isFullScreen ? "editor-panel is-fullscreen" : "editor-panel";
 
     private string GetProjectRowClass(Guid projectId) =>
         ProjectId == projectId ? "project-row active" : "project-row";
@@ -200,6 +234,7 @@
 
     private Task StartNewProjectAsync()
     {
+        pendingSample = null;
         PrepareNewProject();
         statusMessage = "New simpleXflow project draft ready. Give it a name, model the structure, then save it.";
         if (ProjectId.HasValue)
@@ -210,12 +245,27 @@
         return Task.CompletedTask;
     }
 
-    private Task LoadSelectedSampleAsync()
+    private Task RequestSampleLoadAsync()
     {
         var sample = ProjectSamples.Find(selectedSampleId);
         if (sample is null)
         {
             statusMessage = "Select a demo sample first.";
+            return Task.CompletedTask;
+        }
+
+        pendingSample = sample;
+        statusMessage = null;
+        return Task.CompletedTask;
+    }
+
+    private Task ConfirmSampleLoadAsync()
+    {
+        var sample = pendingSample;
+        pendingSample = null;
+
+        if (sample is null)
+        {
             return Task.CompletedTask;
         }
 
@@ -229,8 +279,19 @@
         return Task.CompletedTask;
     }
 
+    private void CancelSampleLoad()
+    {
+        pendingSample = null;
+    }
+
+    private void ToggleFullScreen()
+    {
+        isFullScreen = !isFullScreen;
+    }
+
     private void LoadSampleDraft(ProjectSample sample)
     {
+        pendingSample = null;
         form.Name = sample.Name;
         form.BpmnXml = sample.BpmnXml;
         form.LogicXml = "";

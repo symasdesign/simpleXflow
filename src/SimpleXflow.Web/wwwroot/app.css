@@ -357,6 +357,44 @@ h1:focus {
     overflow: hidden;
 }
 
+.editor-panel.is-fullscreen {
+    border: 0;
+    border-radius: 0;
+    bottom: 0;
+    box-shadow: none;
+    height: 100dvh;
+    left: 0;
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 100vw;
+    z-index: 2000;
+}
+
+.fullscreen-action-bar {
+    align-items: center;
+    background: rgba(255, 255, 255, .94);
+    border: 1px solid #dce5d1;
+    border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(31, 39, 27, .16);
+    display: flex;
+    gap: .75rem;
+    max-width: min(42rem, calc(100vw - 2rem));
+    padding: .55rem;
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    z-index: 12;
+}
+
+.fullscreen-action-bar span {
+    color: #1f271b;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .editor-form {
     display: grid;
     gap: 1rem;
@@ -443,6 +481,45 @@ h1:focus {
     font-size: .85rem;
 }
 
+.confirmation-backdrop {
+    background: rgba(31, 39, 27, .48);
+    display: grid;
+    inset: 0;
+    padding: 1rem;
+    place-items: center;
+    position: fixed;
+    z-index: 3000;
+}
+
+.confirmation-dialog {
+    background: #fff;
+    border: 1px solid #dce5d1;
+    border-radius: 8px;
+    box-shadow: 0 22px 48px rgba(31, 39, 27, .22);
+    display: grid;
+    gap: .8rem;
+    max-width: 34rem;
+    padding: 1.25rem;
+    width: min(100%, 34rem);
+}
+
+.confirmation-dialog h2 {
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+.confirmation-dialog p {
+    color: #53614a;
+    line-height: 1.45;
+    margin: 0;
+}
+
+.confirmation-actions {
+    display: flex;
+    gap: .75rem;
+    justify-content: flex-end;
+}
+
 .simplexflow-editor-host {
     --tabSwitchSize: 1rem;
     flex: 1;
@@ -450,6 +527,10 @@ h1:focus {
     height: auto;
     min-height: 0;
     overflow: hidden;
+}
+
+.editor-panel.is-fullscreen .simplexflow-editor-host {
+    height: 100%;
 }
 
 .simplexflow-editor-host:empty::before {
@@ -563,6 +644,17 @@ h1:focus {
     color: #fff;
 }
 
+.editor-panel.is-fullscreen .simplexflow-bottom-menu li {
+    opacity: 1 !important;
+}
+
+.editor-panel.is-fullscreen .simplexflow-bottom-menu #splitViewMenuItem,
+.editor-panel.is-fullscreen .simplexflow-bottom-menu #logicViewMenuItem {
+    display: inline-flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
 .simplexflow-editor-host .properties-panel-parent {
     border-left: 1px solid #dce5d1;
     height: 100%;
@@ -607,5 +699,14 @@ h1:focus {
     .workflow-hint > div + div {
         border-left: 0;
         border-top: 1px solid #dce5d1;
+    }
+
+    .confirmation-actions {
+        flex-direction: column-reverse;
+    }
+
+    .fullscreen-action-bar {
+        left: 1rem;
+        max-width: calc(100vw - 2rem);
     }
 }

@@ -117,6 +117,7 @@
     private bool initialized;
     private string? loadedXml;
     private int loadedRevision;
+    private bool loadedFullScreen;
     private string? errorMessage;
 
     [Parameter]
@@ -128,6 +129,9 @@
     [Parameter]
     public int Revision { get; set; }
 
+    [Parameter]
+    public bool IsFullScreen { get; set; }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -137,6 +141,12 @@
         else if (initialized && (loadedXml != Xml || loadedRevision != Revision))
         {
             await OpenXmlAsync();
+        }
+
+        if (initialized && loadedFullScreen != IsFullScreen)
+        {
+            loadedFullScreen = IsFullScreen;
+            await ResizeEditorAsync();
         }
     }
 
@@ -153,9 +163,11 @@
         {
             loadedXml = Xml;
             loadedRevision = Revision;
+            loadedFullScreen = IsFullScreen;
             await JSRuntime.InvokeVoidAsync("simpleXflowEditor.initialize", HostId, Xml);
             initialized = true;
             errorMessage = null;
+            await ResizeEditorAsync();
         }
         catch (Exception ex)
         {
@@ -178,6 +190,18 @@
         {
             errorMessage = ex.Message;
             await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ResizeEditorAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("simpleXflowEditor.resize", HostId);
+        }
+        catch
+        {
+            // The legacy editor can render without an explicit resize callback.
         }
     }
 }

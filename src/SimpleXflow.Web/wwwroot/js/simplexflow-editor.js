@@ -139,6 +139,17 @@ window.simpleXflowEditor = (() => {
     });
   }
 
+  function resize(hostId) {
+    window.requestAnimationFrame(() => {
+      const host = document.getElementById(hostId);
+      if (!host) {
+        return;
+      }
+
+      window.dispatchEvent(new Event("resize"));
+    });
+  }
+
   const translations = {
     Change: "Ändern",
     Specifications: "Spezifikationen",
@@ -154,6 +165,7 @@ window.simpleXflowEditor = (() => {
   return {
     initialize,
     openXml,
-    getXml
+    getXml,
+    resize
   };
 })();
