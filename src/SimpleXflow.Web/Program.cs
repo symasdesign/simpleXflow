@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -84,11 +85,33 @@ app.UseAntiforgery();
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapGet("/healthz/db", async (ApplicationDbContext dbContext, CancellationToken cancellationToken) =>
 {
-    var canConnect = await dbContext.Database.CanConnectAsync(cancellationToken);
+    try
+    {
+        await dbContext.Database.OpenConnectionAsync(cancellationToken);
+        await dbContext.Database.CloseConnectionAsync();
 
-    return canConnect
-        ? Results.Ok(new { status = "ok" })
-        : Results.Problem("The database is not reachable.", statusCode: StatusCodes.Status503ServiceUnavailable);
+        return Results.Ok(new
+        {
+            status = "ok",
+            provider = dbContext.Database.ProviderName,
+        });
+    }
+    catch (Exception exception)
+    {
+        return Results.Json(
+            new
+            {
+                status = "unavailable",
+                provider = dbContext.Database.ProviderName,
+                error = new
+                {
+                    type = exception.GetType().Name,
+                    code = exception is DbException dbException ? (int?)dbException.ErrorCode : null,
+                    databaseErrors = GetDatabaseErrors(exception),
+                },
+            },
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
 }).AllowAnonymous();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
@@ -110,3 +133,41 @@ static string GetDefaultDataProtectionPath(IHostEnvironment environment)
 
     return Path.Combine(environment.ContentRootPath, "Data", "DataProtectionKeys");
 }
+
+static IReadOnlyList<DatabaseErrorDescriptor> GetDatabaseErrors(Exception exception)
+{
+    var errors = new List<DatabaseErrorDescriptor>();
+    var currentException = exception;
+
+    while (currentException is not null)
+    {
+        var errorsValue = currentException.GetType().GetProperty("Errors")?.GetValue(currentException);
+        if (errorsValue is System.Collections.IEnumerable databaseErrors)
+        {
+            foreach (var databaseError in databaseErrors)
+            {
+                errors.Add(new DatabaseErrorDescriptor(
+                    GetIntProperty(databaseError, "Number"),
+                    GetIntProperty(databaseError, "State"),
+                    GetIntProperty(databaseError, "Class")));
+            }
+        }
+
+        currentException = currentException.InnerException;
+    }
+
+    return errors;
+}
+
+static int? GetIntProperty(object instance, string propertyName)
+{
+    var value = instance.GetType().GetProperty(propertyName)?.GetValue(instance);
+    if (value is null)
+    {
+        return null;
+    }
+
+    return Convert.ToInt32(value);
+}
+
+internal sealed record DatabaseErrorDescriptor(int? Number, int? State, int? Class);
