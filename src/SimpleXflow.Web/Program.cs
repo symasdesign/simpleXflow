@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using SimpleXflow.Infrastructure;
 using SimpleXflow.Infrastructure.Identity;
 using SimpleXflow.Infrastructure.Persistence;
 using SimpleXflow.Web.Components;
 using SimpleXflow.Web.Components.Account;
+using SimpleXflow.Web.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -80,6 +82,14 @@ app.UseStaticFiles();
 app.UseAntiforgery();
 
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
+app.MapGet("/healthz/db", async (ApplicationDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var canConnect = await dbContext.Database.CanConnectAsync(cancellationToken);
+
+    return canConnect
+        ? Results.Ok(new { status = "ok" })
+        : Results.Problem("The database is not reachable.", statusCode: StatusCodes.Status503ServiceUnavailable);
+}).AllowAnonymous();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -99,56 +109,4 @@ static string GetDefaultDataProtectionPath(IHostEnvironment environment)
     }
 
     return Path.Combine(environment.ContentRootPath, "Data", "DataProtectionKeys");
-}
-
-sealed class DatabaseInitializerHostedService(
-    IServiceScopeFactory scopeFactory,
-    ILogger<DatabaseInitializerHostedService> logger) : BackgroundService
-{
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        try
-        {
-            using var scope = scopeFactory.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-            await EnsureDatabaseCreatedAsync(dbContext, logger, stoppingToken);
-        }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(exception, "Database initialization failed after all retry attempts.");
-        }
-    }
-
-    private static async Task EnsureDatabaseCreatedAsync(
-        ApplicationDbContext dbContext,
-        ILogger logger,
-        CancellationToken cancellationToken)
-    {
-        const int maxAttempts = 12;
-
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            try
-            {
-                await dbContext.Database.EnsureCreatedAsync(cancellationToken);
-                return;
-            }
-            catch (Exception exception) when (attempt < maxAttempts)
-            {
-                var delay = TimeSpan.FromSeconds(attempt * 5);
-                logger.LogWarning(
-                    exception,
-                    "Database initialization failed on attempt {Attempt}/{MaxAttempts}. Retrying in {DelaySeconds} seconds.",
-                    attempt,
-                    maxAttempts,
-                    delay.TotalSeconds);
-
-                await Task.Delay(delay, cancellationToken);
-            }
-        }
-    }
 }

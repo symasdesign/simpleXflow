@@ -92,6 +92,8 @@ DataProtection__KeyPath=/tmp/simplexflow/DataProtectionKeys
 
 Set ingress to external HTTP ingress and target port `8080`.
 
+For SQL Server/Azure SQL the app applies EF Core migrations on startup. Local SQLite development keeps using `EnsureCreatedAsync()` for low-friction setup.
+
 ## Local container build
 
 ```powershell

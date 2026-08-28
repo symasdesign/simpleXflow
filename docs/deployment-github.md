@@ -41,4 +41,4 @@ Azure environment variables override `appsettings.json`, so local development ca
 
 ## Notes
 
-The app creates the database schema on startup with EF Core `EnsureCreatedAsync()`. That keeps the first prototype easy to deploy. Before heavier production use, switch to EF Core migrations so database changes are versioned.
+The app applies EF Core migrations on startup for SQL Server/Azure SQL. Local SQLite development keeps using `EnsureCreatedAsync()` for low-friction setup.
