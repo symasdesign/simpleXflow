@@ -45,6 +45,7 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
+builder.Services.AddHostedService<DatabaseInitializerHostedService>();
 
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
     {
@@ -60,16 +61,6 @@ builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSe
 var app = builder.Build();
 
 app.UseForwardedHeaders();
-
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    var logger = scope.ServiceProvider
-        .GetRequiredService<ILoggerFactory>()
-        .CreateLogger("DatabaseStartup");
-
-    await EnsureDatabaseCreatedAsync(dbContext, logger);
-}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -88,6 +79,7 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseAntiforgery();
 
+app.MapGet("/healthz", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -109,28 +101,54 @@ static string GetDefaultDataProtectionPath(IHostEnvironment environment)
     return Path.Combine(environment.ContentRootPath, "Data", "DataProtectionKeys");
 }
 
-static async Task EnsureDatabaseCreatedAsync(ApplicationDbContext dbContext, ILogger logger)
+sealed class DatabaseInitializerHostedService(
+    IServiceScopeFactory scopeFactory,
+    ILogger<DatabaseInitializerHostedService> logger) : BackgroundService
 {
-    const int maxAttempts = 5;
-
-    for (var attempt = 1; attempt <= maxAttempts; attempt++)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
         {
-            await dbContext.Database.EnsureCreatedAsync();
-            return;
-        }
-        catch (Exception exception) when (attempt < maxAttempts)
-        {
-            var delay = TimeSpan.FromSeconds(attempt * 5);
-            logger.LogWarning(
-                exception,
-                "Database initialization failed on attempt {Attempt}/{MaxAttempts}. Retrying in {DelaySeconds} seconds.",
-                attempt,
-                maxAttempts,
-                delay.TotalSeconds);
+            using var scope = scopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            await Task.Delay(delay);
+            await EnsureDatabaseCreatedAsync(dbContext, logger, stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Database initialization failed after all retry attempts.");
+        }
+    }
+
+    private static async Task EnsureDatabaseCreatedAsync(
+        ApplicationDbContext dbContext,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        const int maxAttempts = 12;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                await dbContext.Database.EnsureCreatedAsync(cancellationToken);
+                return;
+            }
+            catch (Exception exception) when (attempt < maxAttempts)
+            {
+                var delay = TimeSpan.FromSeconds(attempt * 5);
+                logger.LogWarning(
+                    exception,
+                    "Database initialization failed on attempt {Attempt}/{MaxAttempts}. Retrying in {DelaySeconds} seconds.",
+                    attempt,
+                    maxAttempts,
+                    delay.TotalSeconds);
+
+                await Task.Delay(delay, cancellationToken);
+            }
         }
     }
 }
