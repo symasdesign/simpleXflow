@@ -35,6 +35,22 @@ jobs:
           --query "{runningStatus:properties.runningStatus,provisioningState:properties.provisioningState,latestReadyRevisionName:properties.latestReadyRevisionName,fqdn:properties.configuration.ingress.fqdn,image:properties.template.containers[0].image}" \
           --output table
 
+    - name: Show configured environment variable names
+      run: |
+        az containerapp show \
+          --resource-group "${AZURE_RESOURCE_GROUP}" \
+          --name "${AZURE_CONTAINER_APP}" \
+          --query "properties.template.containers[0].env[].{name:name,secretRef:secretRef}" \
+          --output table
+
+    - name: Show configured secret names
+      run: |
+        az containerapp show \
+          --resource-group "${AZURE_RESOURCE_GROUP}" \
+          --name "${AZURE_CONTAINER_APP}" \
+          --query "properties.configuration.secrets[].name" \
+          --output table
+
     - name: Show recent application logs
       run: |
         az containerapp logs show \
