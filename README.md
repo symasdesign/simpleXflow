@@ -16,7 +16,8 @@ simpleXflow is the Blazor WebApp successor for the former Electron-based modelin
 - One tenant per registered user at account creation
 - Tenant ID is emitted as an auth claim
 - EF Core global query filters isolate tenant-owned project data
-- SQLite locally, Azure SQL Database for shared deployments via configuration
+- SQLite locally, PostgreSQL/Neon for low-cost shared deployments via configuration
+- Azure SQL remains available as a fallback provider
 - Visual simpleXflow workspace using the migrated modeler bundle
 - Architecture, split, and logic views backed by the previous Electron visualizer behavior
 - Built-in paper and poster samples for presentation demos
@@ -35,7 +36,8 @@ The app creates the local SQLite database automatically on startup.
 
 ## Deploy
 
-See `docs/deployment-container-apps.md` for the current GitHub Actions, Azure Container Apps, and Azure SQL Database setup.
+See `docs/deployment-container-apps.md` for the current GitHub Actions, Azure Container Apps, and PostgreSQL/Neon setup.
+See `docs/database-postgres-neon.md` for the database switch.
 See `docs/deployment-github.md` only for legacy App Service notes.
 
 ## Paper Demo
@@ -47,7 +49,7 @@ See `docs/paper-demo.md` for the EUROSIM 2026 presentation setup and built-in pa
 1. Replace the compatibility bundle with first-class source-based frontend bundling.
 2. Add import/export endpoints for BPMN ZIP packages and tenant-scoped attachments.
 3. Add static model validation for simpleXflow semantics.
-4. Replace startup schema creation with EF Core migrations for production-grade releases.
+4. Add a one-time data migration path from Azure SQL to PostgreSQL if existing demo data must be preserved.
 
 ## Tests
 

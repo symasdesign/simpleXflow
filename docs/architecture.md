@@ -35,9 +35,15 @@ The Blazor app owns presentation and account pages. Registration creates a tenan
 
 ## Persistence
 
-SQLite is the local default. Azure SQL is enabled through the `Database:Provider` setting:
+SQLite is the local default. PostgreSQL is the preferred shared deployment database because it can run on free/low-cost serverless providers such as Neon. Azure SQL remains available as a fallback.
 
 - `Sqlite`: uses `UseSqlite` with the local `DefaultConnection`
+- `Postgres` or `PostgreSql`: uses `UseNpgsql` with the configured `DefaultConnection`
 - `SqlServer` or `AzureSql`: uses `UseSqlServer` with the configured `DefaultConnection`
 
-This keeps local development simple while allowing Azure App Service deployments to use Azure SQL Database through application settings.
+Production-grade providers use EF Core migrations on startup. The migrations are split per provider so SQL Server and PostgreSQL can keep provider-specific column types and model snapshots:
+
+- `Persistence/Migrations/Postgres`
+- `Persistence/Migrations/SqlServer`
+
+This keeps local development simple while allowing Azure Container Apps deployments to switch database providers through application settings.

@@ -10,8 +10,6 @@ permissions:
 env:
   AZURE_RESOURCE_GROUP: rg-simplexflow
   AZURE_CONTAINER_APP: ca-simplexflow
-  AZURE_SQL_SERVER: simplexflow-sql
-  AZURE_SQL_DATABASE: simplexflow-db
   AZURE_CLIENT_ID: c84a2dc1-e98e-4946-8c68-f084e646fe10
   AZURE_TENANT_ID: 11a68f50-2c95-46d1-b23a-4f2866f69143
   AZURE_SUBSCRIPTION_ID: c3a51299-7014-4440-9741-1f6f9828b745
@@ -61,20 +59,18 @@ jobs:
           --query "properties.template.containers[0].probes" \
           --output json
 
-    - name: Show Azure SQL auto-pause settings
+    - name: Check live health endpoints
+      continue-on-error: true
       run: |
-        az sql server show \
+        fqdn=$(az containerapp show \
           --resource-group "${AZURE_RESOURCE_GROUP}" \
-          --name "${AZURE_SQL_SERVER}" \
-          --query "{name:name,fqdn:fullyQualifiedDomainName,publicNetworkAccess:publicNetworkAccess,state:state}" \
-          --output table
+          --name "${AZURE_CONTAINER_APP}" \
+          --query "properties.configuration.ingress.fqdn" \
+          --output tsv)
 
-        az sql db show \
-          --resource-group "${AZURE_RESOURCE_GROUP}" \
-          --server "${AZURE_SQL_SERVER}" \
-          --name "${AZURE_SQL_DATABASE}" \
-          --query "{name:name,status:status,computeModel:computeModel,autoPauseDelay:autoPauseDelay,minCapacity:minCapacity,capacity:sku.capacity,sku:sku.name,tier:sku.tier,family:sku.family,freeLimitExhaustionBehavior:freeLimitExhaustionBehavior,zoneRedundant:zoneRedundant}" \
-          --output table
+        curl --show-error --location "https://${fqdn}/healthz" || true
+        echo
+        curl --show-error --location "https://${fqdn}/healthz/db" || true
 
     - name: Show recent application logs
       continue-on-error: true

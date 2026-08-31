@@ -47,6 +47,13 @@ internal sealed class DatabaseInitializerHostedService(
                     return;
                 }
 
+                if (IsPostgres(dbContext))
+                {
+                    await dbContext.Database.MigrateAsync(cancellationToken);
+                    logger.LogInformation("PostgreSQL database schema is up to date.");
+                    return;
+                }
+
                 await dbContext.Database.EnsureCreatedAsync(cancellationToken);
                 logger.LogInformation("Local database schema is available.");
                 return;
@@ -69,6 +76,11 @@ internal sealed class DatabaseInitializerHostedService(
     private static bool IsSqlServer(ApplicationDbContext dbContext)
     {
         return dbContext.Database.ProviderName?.Contains("SqlServer", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private static bool IsPostgres(ApplicationDbContext dbContext)
+    {
+        return dbContext.Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private static async Task PrepareExistingSqlServerSchemaForMigrationsAsync(

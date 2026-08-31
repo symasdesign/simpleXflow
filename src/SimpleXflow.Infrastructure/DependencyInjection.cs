@@ -21,29 +21,40 @@ public static class DependencyInjection
 
         services.AddHttpContextAccessor();
         services.AddScoped<ITenantContext, CurrentTenantContext>();
-        services.AddDbContext<ApplicationDbContext>(options =>
+        if (databaseProvider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase)
+            || databaseProvider.Equals("AzureSql", StringComparison.OrdinalIgnoreCase))
         {
-            if (databaseProvider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase)
-                || databaseProvider.Equals("AzureSql", StringComparison.OrdinalIgnoreCase))
-            {
+            services.AddDbContext<ApplicationDbContext, SqlServerApplicationDbContext>(options =>
                 options.UseSqlServer(
                     connectionString,
                     sqlOptions => sqlOptions.EnableRetryOnFailure(
                         maxRetryCount: 5,
                         maxRetryDelay: TimeSpan.FromSeconds(10),
-                        errorNumbersToAdd: null));
-                return;
-            }
-
-            if (databaseProvider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
-            {
-                options.UseSqlite(connectionString);
-                return;
-            }
-
+                        errorNumbersToAdd: null)));
+        }
+        else if (databaseProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase)
+            || databaseProvider.Equals("PostgreSql", StringComparison.OrdinalIgnoreCase)
+            || databaseProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddDbContext<ApplicationDbContext, PostgresApplicationDbContext>(options =>
+                options.UseNpgsql(
+                    connectionString,
+                    postgresOptions => postgresOptions.EnableRetryOnFailure(
+                        maxRetryCount: 5,
+                        maxRetryDelay: TimeSpan.FromSeconds(10),
+                        errorCodesToAdd: null)));
+        }
+        else if (databaseProvider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddDbContext<ApplicationDbContext>(options =>
+                options.UseSqlite(connectionString));
+        }
+        else
+        {
             throw new InvalidOperationException(
-                $"Unsupported database provider '{databaseProvider}'. Use 'Sqlite' or 'SqlServer'.");
-        });
+                $"Unsupported database provider '{databaseProvider}'. Use 'Sqlite', 'SqlServer', or 'Postgres'.");
+        }
+
         services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, TenantClaimsPrincipalFactory>();
         services.AddScoped<IFlowProjectService, FlowProjectService>();
 

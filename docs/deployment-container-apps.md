@@ -7,7 +7,8 @@ This is the preferred path once simpleXflow should use custom domains without pa
 - GitHub Actions builds and tests the solution.
 - GitHub Actions publishes a Linux container image to GitHub Container Registry.
 - Azure Container Apps runs the image on the Consumption plan.
-- Azure SQL Database Free remains the production database.
+- PostgreSQL/Neon is the preferred production database for the public prototype.
+- Azure SQL Database remains supported as a fallback provider.
 - Hostpoint domains point to Azure Container Apps.
 
 ## Current Azure resources
@@ -79,20 +80,33 @@ If the package must stay private, create a GitHub token with `read:packages` per
 
 The current Azure Container App is configured with GHCR registry credentials stored as an Azure Container Apps secret.
 
-## Required Container App settings
+## Required Container App settings for PostgreSQL
 
 Configure these environment variables on the Container App:
 
 ```text
-Database__Provider=SqlServer
-ConnectionStrings__DefaultConnection=<Azure SQL ADO.NET connection string>
+Database__Provider=Postgres
+ConnectionStrings__DefaultConnection=<PostgreSQL or Neon .NET/Npgsql connection string>
 ASPNETCORE_ENVIRONMENT=Production
 DataProtection__KeyPath=/tmp/simplexflow/DataProtectionKeys
 ```
 
 Set ingress to external HTTP ingress and target port `8080`.
 
-For SQL Server/Azure SQL the app applies EF Core migrations on startup. Local SQLite development keeps using `EnsureCreatedAsync()` for low-friction setup.
+For PostgreSQL and SQL Server/Azure SQL the app applies EF Core migrations on startup. Local SQLite development keeps using `EnsureCreatedAsync()` for low-friction setup.
+
+The preferred way to switch the live Container App to PostgreSQL is the manual GitHub workflow `Configure Azure database`. See `docs/database-postgres-neon.md`.
+
+## Azure SQL fallback settings
+
+Azure SQL remains supported for comparison or migration work:
+
+```text
+Database__Provider=SqlServer
+ConnectionStrings__DefaultConnection=<Azure SQL ADO.NET connection string>
+```
+
+The previous Azure SQL Free database can pause when the monthly free quota is exhausted. In that case the app stays online, but registration and login flows that need the database fail until the quota resets or the provider is switched.
 
 ## Local container build
 

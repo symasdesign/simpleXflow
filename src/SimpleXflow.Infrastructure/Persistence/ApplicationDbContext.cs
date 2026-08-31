@@ -8,8 +8,8 @@ using SimpleXflow.Infrastructure.Identity;
 
 namespace SimpleXflow.Infrastructure.Persistence;
 
-public sealed class ApplicationDbContext(
-    DbContextOptions<ApplicationDbContext> options,
+public class ApplicationDbContext(
+    DbContextOptions options,
     ITenantContext tenantContext)
     : IdentityDbContext<ApplicationUser>(options)
 {
