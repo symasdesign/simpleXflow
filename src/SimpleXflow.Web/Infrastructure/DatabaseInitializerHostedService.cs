@@ -4,28 +4,26 @@ using SimpleXflow.Infrastructure.Persistence;
 
 namespace SimpleXflow.Web.Infrastructure;
 
-internal sealed class DatabaseInitializerHostedService(
-    IServiceScopeFactory scopeFactory,
-    ILogger<DatabaseInitializerHostedService> logger) : BackgroundService
+internal sealed class DatabaseInitializer(
+    ApplicationDbContext dbContext,
+    ILogger<DatabaseInitializer> logger)
 {
     private const string InitialMigrationId = "20260828142810_InitialCreate";
     private const string InitialMigrationProductVersion = "10.0.7";
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task InitializeAsync(CancellationToken cancellationToken)
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-            await ApplyDatabaseSchemaAsync(dbContext, stoppingToken);
+            await ApplyDatabaseSchemaAsync(dbContext, cancellationToken);
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "Database initialization failed after all retry attempts.");
+            throw;
         }
     }
 

@@ -44,7 +44,7 @@ builder.Services.AddDataProtection()
     .PersistKeysToDbContext<ApplicationDbContext>()
     .SetApplicationName("simpleXflow");
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
-builder.Services.AddHostedService<DatabaseInitializerHostedService>();
+builder.Services.AddScoped<DatabaseInitializer>();
 
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
     {
@@ -58,6 +58,8 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
 var app = builder.Build();
+
+await InitializeDatabaseAsync(app);
 
 app.UseForwardedHeaders();
 app.Use(async (context, next) =>
@@ -164,6 +166,13 @@ static IReadOnlyList<DatabaseErrorDescriptor> GetDatabaseErrors(Exception except
     }
 
     return errors;
+}
+
+static async Task InitializeDatabaseAsync(WebApplication app)
+{
+    using var scope = app.Services.CreateScope();
+    var initializer = scope.ServiceProvider.GetRequiredService<DatabaseInitializer>();
+    await initializer.InitializeAsync(CancellationToken.None);
 }
 
 static int? GetIntProperty(object instance, string propertyName)
