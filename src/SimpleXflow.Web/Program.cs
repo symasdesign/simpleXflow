@@ -32,13 +32,6 @@ builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
 
-var dataProtectionPath = builder.Configuration["DataProtection:KeyPath"]
-    ?? GetDefaultDataProtectionPath(builder.Environment);
-Directory.CreateDirectory(dataProtectionPath);
-builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionPath))
-    .SetApplicationName("simpleXflow");
-
 builder.Services.AddAuthentication(options =>
     {
         options.DefaultScheme = IdentityConstants.ApplicationScheme;
@@ -47,6 +40,9 @@ builder.Services.AddAuthentication(options =>
     .AddIdentityCookies();
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<ApplicationDbContext>()
+    .SetApplicationName("simpleXflow");
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 builder.Services.AddHostedService<DatabaseInitializerHostedService>();
 
@@ -132,18 +128,6 @@ app.MapRazorComponents<App>()
 app.MapAdditionalIdentityEndpoints();
 
 app.Run();
-
-static string GetDefaultDataProtectionPath(IHostEnvironment environment)
-{
-    var homePath = Environment.GetEnvironmentVariable("HOME");
-
-    if (!environment.IsDevelopment() && !string.IsNullOrWhiteSpace(homePath))
-    {
-        return Path.Combine(homePath, "data", "DataProtectionKeys");
-    }
-
-    return Path.Combine(environment.ContentRootPath, "Data", "DataProtectionKeys");
-}
 
 static bool IsPublicHost(HostString host)
 {

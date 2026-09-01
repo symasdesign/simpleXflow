@@ -59,6 +59,8 @@ The GitHub OIDC identity needs the two minimal Azure roles documented in `docs/d
 
 The app applies PostgreSQL EF Core migrations on startup. A fresh Neon database starts empty, so existing Azure SQL users and projects are not copied automatically. Export/import from Azure SQL can be added as a separate one-time migration if the old data is needed.
 
+Authentication and antiforgery keys are persisted in the same database table `DataProtectionKeys`. This keeps existing login sessions and form posts valid across Azure Container Apps restarts or scale-to-zero wakeups.
+
 ## Verify
 
 Open:

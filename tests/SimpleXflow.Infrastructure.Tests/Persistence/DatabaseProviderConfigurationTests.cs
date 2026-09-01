@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -16,7 +17,9 @@ public sealed class DatabaseProviderConfigurationTests
 
         Assert.Contains("Npgsql", dbContext.Database.ProviderName);
         Assert.Contains("20260831132037_InitialCreate", dbContext.Database.GetMigrations());
+        Assert.Contains("20260901211324_PersistDataProtectionKeys", dbContext.Database.GetMigrations());
         AssertIdentityPasskeysAreMapped(dbContext);
+        AssertDataProtectionKeysAreMapped(dbContext);
     }
 
     [Fact]
@@ -26,7 +29,9 @@ public sealed class DatabaseProviderConfigurationTests
 
         Assert.Contains("SqlServer", dbContext.Database.ProviderName);
         Assert.Contains("20260828142810_InitialCreate", dbContext.Database.GetMigrations());
+        Assert.Contains("20260901211342_PersistDataProtectionKeys", dbContext.Database.GetMigrations());
         AssertIdentityPasskeysAreMapped(dbContext);
+        AssertDataProtectionKeysAreMapped(dbContext);
     }
 
     [Fact]
@@ -57,6 +62,7 @@ public sealed class DatabaseProviderConfigurationTests
         Assert.IsType<PostgresApplicationDbContext>(dbContext);
         Assert.Contains("Npgsql", dbContext.Database.ProviderName);
         AssertIdentityPasskeysAreMapped(dbContext);
+        AssertDataProtectionKeysAreMapped(dbContext);
     }
 
     private static void AssertIdentityPasskeysAreMapped(ApplicationDbContext dbContext)
@@ -65,5 +71,13 @@ public sealed class DatabaseProviderConfigurationTests
 
         Assert.NotNull(passkeyEntity);
         Assert.Equal("AspNetUserPasskeys", passkeyEntity.GetTableName());
+    }
+
+    private static void AssertDataProtectionKeysAreMapped(ApplicationDbContext dbContext)
+    {
+        var keyEntity = dbContext.Model.FindEntityType(typeof(DataProtectionKey));
+
+        Assert.NotNull(keyEntity);
+        Assert.Equal("DataProtectionKeys", keyEntity.GetTableName());
     }
 }

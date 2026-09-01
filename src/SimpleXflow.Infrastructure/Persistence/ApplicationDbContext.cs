@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SimpleXflow.Application.Abstractions;
@@ -11,13 +12,15 @@ namespace SimpleXflow.Infrastructure.Persistence;
 public class ApplicationDbContext(
     DbContextOptions options,
     ITenantContext tenantContext)
-    : IdentityDbContext<ApplicationUser>(options)
+    : IdentityDbContext<ApplicationUser>(options), IDataProtectionKeyContext
 {
     public DbSet<Tenant> Tenants => Set<Tenant>();
 
     public DbSet<FlowProject> Projects => Set<FlowProject>();
 
     public DbSet<ProjectAttachment> ProjectAttachments => Set<ProjectAttachment>();
+
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

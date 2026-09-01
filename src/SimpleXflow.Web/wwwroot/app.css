@@ -564,7 +564,7 @@ h1:focus {
 .simplexflow-editor-host #js-drop-zone.simplexflow-diagram-zone {
     display: grid !important;
     flex: 1;
-    grid-template-columns: minmax(0, 1fr) 400px;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, min(32%, 400px));
     height: 100%;
     min-width: 0;
     padding-top: 0;
@@ -668,7 +668,8 @@ h1:focus {
     height: 100%;
     min-height: 0;
     overflow: auto;
-    width: 400px;
+    min-width: 0;
+    width: auto;
 }
 
 .djs-palette {
@@ -716,5 +717,36 @@ h1:focus {
     .fullscreen-action-bar {
         left: 1rem;
         max-width: calc(100vw - 2rem);
+    }
+}
+
+@media (max-width: 1200px) {
+    .workspace-shell {
+        grid-template-columns: 1fr;
+        height: auto;
+        min-height: calc(100vh - 5.25rem);
+    }
+
+    .project-list {
+        max-height: 18rem;
+        overflow: auto;
+    }
+
+    .editor-panel {
+        min-height: 48rem;
+    }
+}
+
+@media (max-width: 1100px) {
+    .simplexflow-editor-host #js-drop-zone.simplexflow-diagram-zone {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(34rem, 1fr) 18rem;
+    }
+
+    .simplexflow-editor-host .properties-panel-parent {
+        border-left: 0;
+        border-top: 1px solid #dce5d1;
+        height: 18rem;
+        width: 100%;
     }
 }

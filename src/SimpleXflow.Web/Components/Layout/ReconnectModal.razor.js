@@ -8,13 +8,23 @@ retryButton.addEventListener("click", retry);
 const resumeButton = document.getElementById("components-resume-button");
 resumeButton.addEventListener("click", resume);
 
+let reloadTimer;
+
 function handleReconnectStateChanged(event) {
     if (event.detail.state === "show") {
-        reconnectModal.showModal();
+        if (!reconnectModal.open) {
+            reconnectModal.showModal();
+        }
+
+        scheduleReload(15000);
     } else if (event.detail.state === "hide") {
-        reconnectModal.close();
+        cancelReload();
+        if (reconnectModal.open) {
+            reconnectModal.close();
+        }
     } else if (event.detail.state === "failed") {
         document.addEventListener("visibilitychange", retryWhenDocumentBecomesVisible);
+        scheduleReload(2500);
     } else if (event.detail.state === "rejected") {
         location.reload();
     }
@@ -42,6 +52,7 @@ async function retry() {
     } catch (err) {
         // We got an exception, server is currently unavailable
         document.addEventListener("visibilitychange", retryWhenDocumentBecomesVisible);
+        scheduleReload(2500);
     }
 }
 
@@ -53,6 +64,18 @@ async function resume() {
         }
     } catch {
         reconnectModal.classList.replace("components-reconnect-paused", "components-reconnect-resume-failed");
+    }
+}
+
+function scheduleReload(delayMs) {
+    cancelReload();
+    reloadTimer = window.setTimeout(() => location.reload(), delayMs);
+}
+
+function cancelReload() {
+    if (reloadTimer) {
+        window.clearTimeout(reloadTimer);
+        reloadTimer = undefined;
     }
 }
 

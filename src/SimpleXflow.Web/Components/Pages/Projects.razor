@@ -45,10 +45,10 @@
 
                 @foreach (var project in projects)
                 {
-                    <button type="button" class="@GetProjectRowClass(project.Id)" @onclick="() => OpenProject(project.Id)">
+                    <a class="@GetProjectRowClass(project.Id)" href="@GetProjectHref(project.Id)">
                         <span>@project.Name</span>
                         <small>@project.UpdatedUtc.ToLocalTime().ToString("g")</small>
-                    </button>
+                    </a>
                 }
             </nav>
 
@@ -192,20 +192,7 @@
     private string GetProjectRowClass(Guid projectId) =>
         ProjectId == projectId ? "project-row active" : "project-row";
 
-    private void OpenProject(Guid projectId)
-    {
-        if (ProjectId == projectId)
-        {
-            statusMessage = "This project is already open.";
-            return;
-        }
-
-        pendingSample = null;
-        statusMessage = null;
-        selectedSampleId = null;
-        loadedSampleId = null;
-        NavigationManager.NavigateTo($"/projects/{projectId}");
-    }
+    private static string GetProjectHref(Guid projectId) => $"/projects/{projectId}";
 
     protected override async Task OnParametersSetAsync()
     {
