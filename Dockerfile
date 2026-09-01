@@ -23,6 +23,7 @@ WORKDIR /app
 
 ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
+ENV ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
 ENV DataProtection__KeyPath=/tmp/simplexflow/DataProtectionKeys
 
 EXPOSE 8080

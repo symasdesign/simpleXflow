@@ -64,6 +64,17 @@ builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSe
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.Use(async (context, next) =>
+{
+    if (!app.Environment.IsDevelopment()
+        && !context.Request.IsHttps
+        && IsPublicHost(context.Request.Host))
+    {
+        context.Request.Scheme = Uri.UriSchemeHttps;
+    }
+
+    await next();
+});
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -132,6 +143,18 @@ static string GetDefaultDataProtectionPath(IHostEnvironment environment)
     }
 
     return Path.Combine(environment.ContentRootPath, "Data", "DataProtectionKeys");
+}
+
+static bool IsPublicHost(HostString host)
+{
+    if (!host.HasValue)
+    {
+        return false;
+    }
+
+    return !host.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+        && !host.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)
+        && !host.Host.Equals("[::1]", StringComparison.OrdinalIgnoreCase);
 }
 
 static IReadOnlyList<DatabaseErrorDescriptor> GetDatabaseErrors(Exception exception)
