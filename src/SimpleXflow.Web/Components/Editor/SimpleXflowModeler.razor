@@ -121,6 +121,7 @@
     private int loadedRevision;
     private bool loadedFullScreen;
     private string? errorMessage;
+    private bool allowRender = true;
 
     [Parameter]
     public string ProjectName { get; set; } = "";
@@ -140,21 +141,32 @@
     [Parameter]
     public bool IsFullScreen { get; set; }
 
+    protected override bool ShouldRender() => allowRender;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!initialized)
+        {
+            return;
+        }
+
+        if (loadedXml != Xml || loadedLogicXml != LogicXml || loadedLogicTargetElementId != LogicTargetElementId || loadedRevision != Revision)
+        {
+            await OpenXmlAsync();
+        }
+
+        if (loadedFullScreen != IsFullScreen)
+        {
+            loadedFullScreen = IsFullScreen;
+            await ResizeEditorAsync();
+        }
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             await InitializeEditorAsync();
-        }
-        else if (initialized && (loadedXml != Xml || loadedLogicXml != LogicXml || loadedLogicTargetElementId != LogicTargetElementId || loadedRevision != Revision))
-        {
-            await OpenXmlAsync();
-        }
-
-        if (initialized && loadedFullScreen != IsFullScreen)
-        {
-            loadedFullScreen = IsFullScreen;
-            await ResizeEditorAsync();
         }
     }
 
@@ -177,12 +189,14 @@
             await JSRuntime.InvokeVoidAsync("simpleXflowEditor.initialize", HostId, Xml, LogicXml, LogicTargetElementId);
             initialized = true;
             errorMessage = null;
+            allowRender = false;
             await ResizeEditorAsync();
         }
         catch (Exception ex)
         {
             initialized = false;
             errorMessage = ex.Message;
+            allowRender = true;
             await InvokeAsync(StateHasChanged);
         }
     }

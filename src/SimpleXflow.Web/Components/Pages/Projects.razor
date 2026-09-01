@@ -45,7 +45,7 @@
 
                 @foreach (var project in projects)
                 {
-                    <a class="@GetProjectRowClass(project.Id)" href="@GetProjectHref(project.Id)">
+                    <a class="@GetProjectRowClass(project.Id)" href="@GetProjectHref(project.Id)" data-enhance-nav="false">
                         <span>@project.Name</span>
                         <small>@project.UpdatedUtc.ToLocalTime().ToString("g")</small>
                     </a>
@@ -268,7 +268,7 @@
         statusMessage = "New simpleXflow project draft ready. Give it a name, model the structure, then save it.";
         if (ProjectId.HasValue || !string.IsNullOrWhiteSpace(SampleId))
         {
-            NavigationManager.NavigateTo("/projects");
+            NavigateWithFreshEditor("/projects");
         }
 
         return Task.CompletedTask;
@@ -300,7 +300,7 @@
 
         if (ProjectId.HasValue)
         {
-            NavigationManager.NavigateTo($"/projects?sample={Uri.EscapeDataString(sample.Id)}");
+            NavigateWithFreshEditor($"/projects?sample={Uri.EscapeDataString(sample.Id)}");
             return Task.CompletedTask;
         }
 
@@ -356,7 +356,7 @@
             {
                 var createdProjectId = await ProjectService.CreateProjectAsync(new CreateProjectRequest(form.Name, form.BpmnXml, form.LogicXml));
                 statusMessage = editorReadWarning ?? "Project saved.";
-                NavigationManager.NavigateTo($"/projects/{createdProjectId}");
+                NavigateWithFreshEditor($"/projects/{createdProjectId}");
                 return;
             }
 
@@ -433,7 +433,7 @@
 
             projects = await ProjectService.GetProjectsAsync();
             statusMessage = $"Imported {importedProject.Name}.";
-            NavigationManager.NavigateTo($"/projects/{createdProjectId}");
+            NavigateWithFreshEditor($"/projects/{createdProjectId}");
         }
         catch (Exception ex)
         {
@@ -511,6 +511,11 @@
     {
         var name = Path.GetFileNameWithoutExtension(fileName).Trim();
         return string.IsNullOrWhiteSpace(name) ? "Imported project" : name;
+    }
+
+    private void NavigateWithFreshEditor(string uri)
+    {
+        NavigationManager.NavigateTo(uri, forceLoad: true);
     }
 
     private sealed class ProjectForm
