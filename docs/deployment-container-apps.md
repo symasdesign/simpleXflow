@@ -57,7 +57,17 @@ repo:symasdesign/simpleXflow:ref:refs/heads/main
 repo:symasdesign@15147370/simpleXflow@1340624403:ref:refs/heads/main
 ```
 
-The app registration is assigned the custom role `simpleXflow Container App Image Deployer` on `ca-simplexflow`. No publish profile or client secret is required.
+The app registration uses narrowly scoped custom roles. No publish profile or client secret is required.
+
+```text
+Role: simpleXflow Container App Image Deployer
+Scope: ca-simplexflow
+Purpose: update the selected container image and app revision
+
+Role: simpleXflow Container Apps Environment Joiner
+Scope: cae-simplexflow
+Purpose: allow Container Apps environment join checks while setting Container App secrets
+```
 
 Manual deployment from a local Azure CLI session is also possible:
 

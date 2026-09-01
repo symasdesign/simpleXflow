@@ -55,6 +55,8 @@ Database__Provider=Postgres
 ConnectionStrings__DefaultConnection=secretref:postgres-connection-string
 ```
 
+The GitHub OIDC identity needs the two minimal Azure roles documented in `docs/deployment-container-apps.md`: one scoped to `ca-simplexflow` for updating the Container App, and one scoped to `cae-simplexflow` for the Environment join check required by secret updates.
+
 The app applies PostgreSQL EF Core migrations on startup. A fresh Neon database starts empty, so existing Azure SQL users and projects are not copied automatically. Export/import from Azure SQL can be added as a separate one-time migration if the old data is needed.
 
 ## Verify
