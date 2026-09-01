@@ -333,6 +333,14 @@ h1:focus {
     background: #edf4e3;
 }
 
+.project-row.draft {
+    border-left: 3px solid #5d773c;
+}
+
+.project-row.draft small {
+    color: #4a5f2f;
+}
+
 .empty-state {
     padding: 1rem;
 }

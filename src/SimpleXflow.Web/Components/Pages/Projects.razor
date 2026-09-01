@@ -24,7 +24,7 @@
             <button type="button" class="icon-button" title="New simpleXflow project" @onclick="StartNewProjectAsync">+</button>
         </div>
 
-        @if (projects.Count == 0)
+        @if (projects.Count == 0 && ProjectId.HasValue)
         {
             <div class="empty-state project-empty-state">
                 <strong>No simpleXflow projects yet</strong>
@@ -35,6 +35,14 @@
         else
         {
             <nav class="project-nav" aria-label="simpleXflow projects">
+                @if (!ProjectId.HasValue)
+                {
+                    <button type="button" class="project-row active draft" @onclick="StartNewProjectAsync">
+                        <span>@DraftName</span>
+                        <small>Unsaved draft</small>
+                    </button>
+                }
+
                 @foreach (var project in projects)
                 {
                     <button type="button" class="@GetProjectRowClass(project.Id)" @onclick="() => OpenProject(project.Id)">
@@ -43,6 +51,14 @@
                     </button>
                 }
             </nav>
+
+            @if (projects.Count == 0)
+            {
+                <div class="empty-state project-empty-state">
+                    <strong>No saved projects yet</strong>
+                    <span>The draft above is ready. Name it, model the structure, then save it.</span>
+                </div>
+            }
         }
     </aside>
 
@@ -154,6 +170,9 @@
     private bool isFullScreen;
     private int editorRevision;
     private Guid? loadedProjectId;
+    private string? loadedSampleId;
+
+    private string DraftName => string.IsNullOrWhiteSpace(form.Name) ? "New project" : form.Name;
 
     private string Title => ProjectId.HasValue ? form.Name : "New project";
 
@@ -173,8 +192,20 @@
     private string GetProjectRowClass(Guid projectId) =>
         ProjectId == projectId ? "project-row active" : "project-row";
 
-    private void OpenProject(Guid projectId) =>
-        NavigationManager.NavigateTo($"projects/{projectId}", forceLoad: true);
+    private void OpenProject(Guid projectId)
+    {
+        if (ProjectId == projectId)
+        {
+            statusMessage = "This project is already open.";
+            return;
+        }
+
+        pendingSample = null;
+        statusMessage = null;
+        selectedSampleId = null;
+        loadedSampleId = null;
+        NavigationManager.NavigateTo($"/projects/{projectId}");
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -185,7 +216,7 @@
             var project = await ProjectService.GetProjectAsync(id);
             if (project is null)
             {
-                NavigationManager.NavigateTo("projects");
+                NavigationManager.NavigateTo("/projects");
                 return;
             }
 
@@ -197,20 +228,28 @@
             if (loadedProjectId != id)
             {
                 loadedProjectId = id;
+                loadedSampleId = null;
+                statusMessage = null;
+                selectedSampleId = null;
                 editorRevision++;
             }
         }
         else if (!string.IsNullOrWhiteSpace(SampleId))
         {
-            var sample = ProjectSamples.Find(SampleId);
-            if (sample is not null)
+            if (!string.Equals(loadedSampleId, SampleId, StringComparison.OrdinalIgnoreCase))
             {
-                LoadSampleDraft(sample);
-            }
-            else if (string.IsNullOrWhiteSpace(form.BpmnXml))
-            {
-                PrepareNewProject();
-                statusMessage = "The selected demo sample was not found.";
+                var sample = ProjectSamples.Find(SampleId);
+                if (sample is not null)
+                {
+                    LoadSampleDraft(sample);
+                }
+                else if (string.IsNullOrWhiteSpace(form.BpmnXml))
+                {
+                    PrepareNewProject();
+                    statusMessage = "The selected demo sample was not found.";
+                }
+
+                loadedSampleId = SampleId;
             }
         }
         else if (string.IsNullOrWhiteSpace(form.BpmnXml))
@@ -231,6 +270,7 @@
         form.LogicXml = "";
         form.LogicTargetElementId = null;
         loadedProjectId = null;
+        loadedSampleId = null;
         editorRevision++;
     }
 
@@ -239,9 +279,9 @@
         pendingSample = null;
         PrepareNewProject();
         statusMessage = "New simpleXflow project draft ready. Give it a name, model the structure, then save it.";
-        if (ProjectId.HasValue)
+        if (ProjectId.HasValue || !string.IsNullOrWhiteSpace(SampleId))
         {
-            NavigationManager.NavigateTo("projects", forceLoad: true, replace: true);
+            NavigationManager.NavigateTo("/projects");
         }
 
         return Task.CompletedTask;
@@ -273,7 +313,7 @@
 
         if (ProjectId.HasValue)
         {
-            NavigationManager.NavigateTo($"projects?sample={Uri.EscapeDataString(sample.Id)}", forceLoad: true, replace: true);
+            NavigationManager.NavigateTo($"/projects?sample={Uri.EscapeDataString(sample.Id)}");
             return Task.CompletedTask;
         }
 
@@ -300,6 +340,7 @@
         form.LogicTargetElementId = sample.LogicTargetElementId;
         selectedSampleId = sample.Id;
         loadedProjectId = null;
+        loadedSampleId = sample.Id;
         editorRevision++;
         statusMessage = string.IsNullOrWhiteSpace(form.LogicXml)
             ? $"{sample.Name} loaded as draft. Review it, adapt if needed, then save it to the tenant workspace."
@@ -328,7 +369,7 @@
             {
                 var createdProjectId = await ProjectService.CreateProjectAsync(new CreateProjectRequest(form.Name, form.BpmnXml, form.LogicXml));
                 statusMessage = editorReadWarning ?? "Project saved.";
-                NavigationManager.NavigateTo($"projects/{createdProjectId}", forceLoad: true);
+                NavigationManager.NavigateTo($"/projects/{createdProjectId}");
                 return;
             }
 
@@ -405,7 +446,7 @@
 
             projects = await ProjectService.GetProjectsAsync();
             statusMessage = $"Imported {importedProject.Name}.";
-            NavigationManager.NavigateTo($"projects/{createdProjectId}", forceLoad: true);
+            NavigationManager.NavigateTo($"/projects/{createdProjectId}");
         }
         catch (Exception ex)
         {

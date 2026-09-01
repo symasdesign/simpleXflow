@@ -4,6 +4,7 @@ window.simpleXflowEditor = (() => {
   const editorStates = new Map();
   let bundlePromise;
   let currentLogicXml = "";
+  let openAttemptId = 0;
 
   function getCallbackList(name) {
     if (!callbacks.has(name)) {
@@ -87,20 +88,39 @@ window.simpleXflowEditor = (() => {
       bundlePromise = new Promise((resolve, reject) => {
         const existing = document.querySelector(`script[src="${scriptUrl}"]`);
         if (existing) {
-          resolve();
+          if (existing.dataset.simplexflowLoading === "true") {
+            existing.addEventListener("load", () => resolve(), { once: true });
+            existing.addEventListener("error", () => reject(new Error("Could not load the simpleXflow editor bundle.")), { once: true });
+          } else {
+            resolve();
+          }
           return;
         }
 
         const script = document.createElement("script");
         script.src = scriptUrl;
         script.async = false;
-        script.onload = () => resolve();
+        script.dataset.simplexflowLoading = "true";
+        script.onload = () => {
+          script.dataset.simplexflowLoading = "false";
+          script.dataset.simplexflowLoaded = "true";
+          resolve();
+        };
         script.onerror = () => reject(new Error("Could not load the simpleXflow editor bundle."));
         document.body.appendChild(script);
       });
     }
 
     return bundlePromise;
+  }
+
+  function dispatchEditorResize() {
+    window.requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+  }
+
+  function hasRenderedArchitecture() {
+    const canvas = document.getElementById("js-canvas");
+    return !!canvas?.querySelector("svg");
   }
 
   function openLogic(logicXml) {
@@ -111,6 +131,40 @@ window.simpleXflowEditor = (() => {
     }
 
     window.requestAnimationFrame(() => emit("openLogic", currentLogicXml));
+  }
+
+  function replayOpenXml(editorXml, logicXml) {
+    const attemptId = ++openAttemptId;
+    const open = () => {
+      if (attemptId !== openAttemptId) {
+        return;
+      }
+
+      emit("openXmlFile", editorXml);
+      openLogic(logicXml);
+      dispatchEditorResize();
+    };
+
+    open();
+    window.requestAnimationFrame(() => {
+      if (attemptId === openAttemptId) {
+        open();
+      }
+    });
+
+    for (const delay of [120, 420, 900]) {
+      window.setTimeout(() => {
+        if (attemptId !== openAttemptId) {
+          return;
+        }
+
+        if (!hasRenderedArchitecture()) {
+          open();
+        } else {
+          dispatchEditorResize();
+        }
+      }, delay);
+    }
   }
 
   function attachLogicToElement(xml, logicXml, targetElementId) {
@@ -144,8 +198,7 @@ window.simpleXflowEditor = (() => {
 
     const editorXml = attachLogicToElement(xml, logicXml, logicTargetElementId);
     editorStates.set(hostId, { xml: editorXml, logicXml, logicTargetElementId });
-    emit("openXmlFile", editorXml);
-    openLogic(logicXml);
+    replayOpenXml(editorXml, logicXml);
     host.classList.add("is-ready");
     window.markAsClean?.();
   }
@@ -154,8 +207,7 @@ window.simpleXflowEditor = (() => {
     const editorXml = attachLogicToElement(xml, logicXml, logicTargetElementId);
     editorStates.set(hostId, { xml: editorXml, logicXml, logicTargetElementId });
     await ensureBundle();
-    emit("openXmlFile", editorXml);
-    openLogic(logicXml);
+    replayOpenXml(editorXml, logicXml);
     window.markAsClean?.();
   }
 
@@ -194,7 +246,7 @@ window.simpleXflowEditor = (() => {
         return;
       }
 
-      window.dispatchEvent(new Event("resize"));
+      dispatchEditorResize();
     });
   }
 
