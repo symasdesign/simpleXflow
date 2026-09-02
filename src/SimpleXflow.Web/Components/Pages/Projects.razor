@@ -220,7 +220,7 @@
                 : "autosave-indicator is-saved";
 
     private string HelpText => ProjectId.HasValue
-        ? "Changes are saved automatically. Use the editor's Ctrl+Z while modeling to reverse the last local diagram action."
+        ? "Changes are saved automatically while you work."
         : "Create a project to save it immediately in this tenant workspace, then model its structure.";
 
     private string EditorPanelClass =>
@@ -513,6 +513,8 @@
         {
             isSaving = false;
         }
+
+        await InvokeAsync(StateHasChanged);
 
         if (hasPendingAutosave)
         {
