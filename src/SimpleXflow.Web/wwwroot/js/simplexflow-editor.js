@@ -178,12 +178,13 @@ window.simpleXflowEditor = (() => {
 
   function installChangeObserver(hostId) {
     const state = getState(hostId);
-    state.observer?.disconnect();
     state.changeEventTargets?.forEach(({ target, listener }) => {
-      target.removeEventListener("input", listener, true);
-      target.removeEventListener("change", listener, true);
+      for (const eventName of listener.eventNames) {
+        target.removeEventListener(eventName, listener.handle, true);
+      }
     });
 
+    const host = document.getElementById(hostId);
     const canvas = document.getElementById("js-canvas");
     const logicCanvas = document.getElementById("js-simbpmncanvas");
     const propertiesPanel = document.getElementById("js-properties-panel");
@@ -194,23 +195,57 @@ window.simpleXflowEditor = (() => {
       return;
     }
 
-    state.observer = new MutationObserver(() => scheduleEditorChange(hostId));
+    const shouldTrackEvent = (event) => {
+      if (event?.type === "keyup") {
+        const trackedKeys = ["Delete", "Backspace", "z", "Z", "y", "Y"];
+        if (!trackedKeys.includes(event.key)) {
+          return false;
+        }
+      }
 
-    for (const target of targets) {
-      state.observer.observe(target, {
-        attributes: true,
-        childList: true,
-        characterData: true,
-        subtree: true
-      });
+      return !event?.target
+        || !(event.target instanceof Node)
+        || !host
+        || host.contains(event.target)
+        || event.target === document.body;
+    };
+
+    const createListener = (eventNames) => {
+      const listener = {
+        eventNames,
+        handle: (event) => {
+          if (shouldTrackEvent(event)) {
+            scheduleEditorChange(hostId);
+          }
+        }
+      };
+
+      return listener;
+    };
+
+    const addTrackedListener = (target, eventNames) => {
+      const listener = createListener(eventNames);
+      for (const eventName of eventNames) {
+        target.addEventListener(eventName, listener.handle, true);
+      }
+
+      state.changeEventTargets.push({ target, listener });
+    };
+
+    state.changeEventTargets = [];
+    if (canvas) {
+      addTrackedListener(canvas, ["pointerup", "mouseup", "drop"]);
     }
 
-    const listener = () => scheduleEditorChange(hostId);
-    state.changeEventTargets = targets.map((target) => {
-      target.addEventListener("input", listener, true);
-      target.addEventListener("change", listener, true);
-      return { target, listener };
-    });
+    if (logicCanvas) {
+      addTrackedListener(logicCanvas, ["pointerup", "mouseup", "drop"]);
+    }
+
+    if (propertiesPanel) {
+      addTrackedListener(propertiesPanel, ["input", "change", "blur"]);
+    }
+
+    addTrackedListener(document, ["keyup"]);
   }
 
   function hasRenderedArchitecture() {
@@ -449,12 +484,11 @@ window.simpleXflowEditor = (() => {
 
     const state = editorStates.get(hostId);
     window.clearTimeout(state.changeTimer);
-    state.observer?.disconnect();
     state.changeEventTargets?.forEach(({ target, listener }) => {
-      target.removeEventListener("input", listener, true);
-      target.removeEventListener("change", listener, true);
+      for (const eventName of listener.eventNames) {
+        target.removeEventListener(eventName, listener.handle, true);
+      }
     });
-    delete state.observer;
     delete state.changeEventTargets;
     delete state.dotNetReference;
   }
