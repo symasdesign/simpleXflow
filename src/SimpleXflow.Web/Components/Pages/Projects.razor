@@ -223,7 +223,7 @@
             }
 
             form.Name = project.Name;
-            form.BpmnXml = project.BpmnXml;
+            form.BpmnXml = GetValidBpmnXmlOrDefault(project.BpmnXml);
             form.LogicXml = project.LogicXml ?? "";
             form.LogicTargetElementId = null;
             canUndo = project.CanUndo;
@@ -427,7 +427,7 @@
                 ?? throw new InvalidOperationException("The requested project does not exist in this tenant.");
 
             form.Name = project.Name;
-            form.BpmnXml = project.BpmnXml;
+            form.BpmnXml = GetValidBpmnXmlOrDefault(project.BpmnXml);
             form.LogicXml = project.LogicXml ?? "";
             form.LogicTargetElementId = null;
             canUndo = project.CanUndo;
@@ -464,7 +464,7 @@
             editorReadWarning = $"Saved using the last known simpleXflow model because the visual editor did not return XML. Details: {ex.Message}";
         }
 
-        return form.BpmnXml;
+        return GetValidBpmnXmlOrDefault(form.BpmnXml);
     }
 
     private async Task<string?> GetEditorLogicOrFallbackAsync()
@@ -588,6 +588,11 @@
     {
         var name = Path.GetFileNameWithoutExtension(fileName).Trim();
         return string.IsNullOrWhiteSpace(name) ? "Imported project" : name;
+    }
+
+    private static string GetValidBpmnXmlOrDefault(string? xml)
+    {
+        return string.IsNullOrWhiteSpace(xml) ? DefaultBpmnXml.Trim() : xml.Trim();
     }
 
     private void NavigateWithFreshEditor(string uri)

@@ -15,7 +15,7 @@ public sealed class FlowProject : ITenantEntity
         Id = Guid.NewGuid();
         TenantId = tenantId;
         Name = NormalizeName(name);
-        BpmnXml = bpmnXml;
+        BpmnXml = NormalizeModelXml(bpmnXml);
         CreatedUtc = DateTimeOffset.UtcNow;
         UpdatedUtc = CreatedUtc;
     }
@@ -89,7 +89,7 @@ public sealed class FlowProject : ITenantEntity
             throw new ArgumentException("A simpleXflow model is required.", nameof(bpmnXml));
         }
 
-        BpmnXml = bpmnXml;
+        BpmnXml = NormalizeModelXml(bpmnXml);
         LogicXml = string.IsNullOrWhiteSpace(logicXml) ? null : logicXml;
     }
 
@@ -122,5 +122,15 @@ public sealed class FlowProject : ITenantEntity
         }
 
         return name.Trim();
+    }
+
+    private static string NormalizeModelXml(string bpmnXml)
+    {
+        if (string.IsNullOrWhiteSpace(bpmnXml))
+        {
+            throw new ArgumentException("A simpleXflow model is required.", nameof(bpmnXml));
+        }
+
+        return bpmnXml.Trim();
     }
 }

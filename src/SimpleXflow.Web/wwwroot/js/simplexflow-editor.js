@@ -1,5 +1,18 @@
 window.simpleXflowEditor = (() => {
   const scriptUrl = "/vendor/simbpmn/main_window/index.js";
+  const defaultArchitectureXml = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd" id="sample-diagram" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn2:process id="Process_1" isExecutable="false">
+    <bpmn2:startEvent id="StartEvent_1" />
+  </bpmn2:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">
+      <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1">
+        <dc:Bounds height="36.0" width="36.0" x="412.0" y="240.0" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn2:definitions>`;
   const callbacks = new Map();
   const editorStates = new Map();
   let bundlePromise;
@@ -125,6 +138,15 @@ window.simpleXflowEditor = (() => {
     return !!canvas?.querySelector(".djs-element, .djs-shape, .djs-connection");
   }
 
+  function normalizeArchitectureXml(xml) {
+    if (typeof xml !== "string") {
+      return defaultArchitectureXml;
+    }
+
+    const normalizedXml = xml.trim();
+    return normalizedXml || defaultArchitectureXml;
+  }
+
   function getActiveEditorState() {
     if (activeHostId && editorStates.has(activeHostId)) {
       return editorStates.get(activeHostId);
@@ -152,7 +174,7 @@ window.simpleXflowEditor = (() => {
   }
 
   function getFallbackArchitectureXml() {
-    return currentArchitectureXml || getActiveEditorState()?.xml || "";
+    return normalizeArchitectureXml(currentArchitectureXml || getActiveEditorState()?.xml || "");
   }
 
   async function waitForCallback(name, timeoutMs) {
@@ -251,7 +273,7 @@ window.simpleXflowEditor = (() => {
       throw new Error("The simpleXflow editor host is missing.");
     }
 
-    const editorXml = attachLogicToElement(xml, logicXml, logicTargetElementId);
+    const editorXml = normalizeArchitectureXml(attachLogicToElement(xml, logicXml, logicTargetElementId));
     activeHostId = hostId;
     editorStates.set(hostId, { xml: editorXml, logicXml, logicTargetElementId });
     rememberArchitectureXml(editorXml);
@@ -262,7 +284,7 @@ window.simpleXflowEditor = (() => {
   }
 
   async function openXml(hostId, xml, logicXml, logicTargetElementId) {
-    const editorXml = attachLogicToElement(xml, logicXml, logicTargetElementId);
+    const editorXml = normalizeArchitectureXml(attachLogicToElement(xml, logicXml, logicTargetElementId));
     activeHostId = hostId;
     editorStates.set(hostId, { xml: editorXml, logicXml, logicTargetElementId });
     rememberArchitectureXml(editorXml);
@@ -287,7 +309,7 @@ window.simpleXflowEditor = (() => {
         settled = true;
         window.clearTimeout(timeout);
 
-        const editorXml = xml?.trim() ? xml : getFallbackArchitectureXml();
+        const editorXml = xml?.trim() ? normalizeArchitectureXml(xml) : getFallbackArchitectureXml();
         rememberArchitectureXml(editorXml);
         resolve(editorXml);
       };
