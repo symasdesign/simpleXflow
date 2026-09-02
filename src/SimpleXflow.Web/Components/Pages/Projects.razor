@@ -164,6 +164,7 @@
 
     private readonly ProjectForm form = new();
     private const int AutosaveDelayMilliseconds = 1200;
+    private static readonly TimeSpan EditorReadTimeout = TimeSpan.FromSeconds(5);
     private IReadOnlyList<ProjectSummary> projects = [];
     private bool isSaving;
     private bool isImporting;
@@ -514,7 +515,8 @@
     {
         try
         {
-            var editorXml = await JSRuntime.InvokeAsync<string>("simpleXflowEditor.getXml");
+            using var timeout = new CancellationTokenSource(EditorReadTimeout);
+            var editorXml = await JSRuntime.InvokeAsync<string>("simpleXflowEditor.getXml", timeout.Token);
             if (!string.IsNullOrWhiteSpace(editorXml))
             {
                 return editorXml;
@@ -532,7 +534,8 @@
     {
         try
         {
-            var editorLogicXml = await JSRuntime.InvokeAsync<string?>("simpleXflowEditor.getLogic");
+            using var timeout = new CancellationTokenSource(EditorReadTimeout);
+            var editorLogicXml = await JSRuntime.InvokeAsync<string?>("simpleXflowEditor.getLogic", timeout.Token);
             if (!string.IsNullOrWhiteSpace(editorLogicXml))
             {
                 return editorLogicXml;

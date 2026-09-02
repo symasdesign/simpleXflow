@@ -183,12 +183,12 @@ window.simpleXflowEditor = (() => {
         target.removeEventListener(eventName, listener.handle, true);
       }
     });
+    state.downloadLinkObserver?.disconnect();
 
     const host = document.getElementById(hostId);
-    const canvas = document.getElementById("js-canvas");
-    const logicCanvas = document.getElementById("js-simbpmncanvas");
+    const downloadLink = document.getElementById("js-download-diagram");
     const propertiesPanel = document.getElementById("js-properties-panel");
-    const targets = [canvas, logicCanvas, propertiesPanel].filter(Boolean);
+    const targets = [downloadLink, propertiesPanel].filter(Boolean);
 
     if (targets.length === 0) {
       window.setTimeout(() => installChangeObserver(hostId), 250);
@@ -233,19 +233,26 @@ window.simpleXflowEditor = (() => {
     };
 
     state.changeEventTargets = [];
-    if (canvas) {
-      addTrackedListener(canvas, ["pointerup", "mouseup", "drop"]);
-    }
-
-    if (logicCanvas) {
-      addTrackedListener(logicCanvas, ["pointerup", "mouseup", "drop"]);
-    }
-
     if (propertiesPanel) {
       addTrackedListener(propertiesPanel, ["input", "change", "blur"]);
     }
 
     addTrackedListener(document, ["keyup"]);
+
+    if (downloadLink) {
+      state.downloadLinkObserver = new MutationObserver(() => {
+        const xml = getDownloadLinkXml();
+        if (xml) {
+          rememberArchitectureXml(xml);
+          scheduleEditorChange(hostId);
+        }
+      });
+
+      state.downloadLinkObserver.observe(downloadLink, {
+        attributes: true,
+        attributeFilter: ["href"]
+      });
+    }
   }
 
   function hasRenderedArchitecture() {
@@ -466,11 +473,13 @@ window.simpleXflowEditor = (() => {
 
     const state = editorStates.get(hostId);
     window.clearTimeout(state.changeTimer);
+    state.downloadLinkObserver?.disconnect();
     state.changeEventTargets?.forEach(({ target, listener }) => {
       for (const eventName of listener.eventNames) {
         target.removeEventListener(eventName, listener.handle, true);
       }
     });
+    delete state.downloadLinkObserver;
     delete state.changeEventTargets;
     delete state.dotNetReference;
   }
