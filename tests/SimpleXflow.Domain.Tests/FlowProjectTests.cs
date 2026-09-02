@@ -37,4 +37,33 @@ public sealed class FlowProjectTests
 
         Assert.Throws<ArgumentException>(() => project.Rename(""));
     }
+
+    [Fact]
+    public void UpdateProject_CapturesPreviousSavedVersion()
+    {
+        var project = new FlowProject(Guid.NewGuid(), "Original", "<old />");
+
+        project.UpdateProject("Changed", "<new />", "<logic />");
+
+        Assert.Equal("Changed", project.Name);
+        Assert.Equal("<new />", project.BpmnXml);
+        Assert.Equal("<logic />", project.LogicXml);
+        Assert.True(project.CanUndo);
+        Assert.Equal("Original", project.PreviousName);
+        Assert.Equal("<old />", project.PreviousBpmnXml);
+    }
+
+    [Fact]
+    public void UndoLastChange_RestoresPreviousSavedVersion()
+    {
+        var project = new FlowProject(Guid.NewGuid(), "Original", "<old />");
+        project.UpdateProject("Changed", "<new />", "<logic />");
+
+        project.UndoLastChange();
+
+        Assert.Equal("Original", project.Name);
+        Assert.Equal("<old />", project.BpmnXml);
+        Assert.Null(project.LogicXml);
+        Assert.False(project.CanUndo);
+    }
 }

@@ -30,11 +30,21 @@ public sealed class FlowProject : ITenantEntity
 
     public string? LogicXml { get; private set; }
 
+    public string? PreviousName { get; private set; }
+
+    public string? PreviousBpmnXml { get; private set; }
+
+    public string? PreviousLogicXml { get; private set; }
+
+    public DateTimeOffset? PreviousUpdatedUtc { get; private set; }
+
     public DateTimeOffset CreatedUtc { get; private set; }
 
     public DateTimeOffset UpdatedUtc { get; private set; }
 
     public IReadOnlyCollection<ProjectAttachment> Attachments => _attachments;
+
+    public bool CanUndo => !string.IsNullOrWhiteSpace(PreviousBpmnXml);
 
     public void Rename(string name)
     {
@@ -42,11 +52,61 @@ public sealed class FlowProject : ITenantEntity
         Touch();
     }
 
+    public void UpdateProject(string name, string bpmnXml, string? logicXml)
+    {
+        CaptureUndoSnapshot();
+        Name = NormalizeName(name);
+        ApplyModel(bpmnXml, logicXml);
+        Touch();
+    }
+
     public void UpdateModel(string bpmnXml, string? logicXml)
     {
+        ApplyModel(bpmnXml, logicXml);
+        Touch();
+    }
+
+    public void UndoLastChange()
+    {
+        if (!CanUndo)
+        {
+            throw new InvalidOperationException("There is no saved change to undo for this project.");
+        }
+
+        Name = PreviousName ?? Name;
+        BpmnXml = PreviousBpmnXml!;
+        LogicXml = PreviousLogicXml;
+        UpdatedUtc = PreviousUpdatedUtc ?? UpdatedUtc;
+
+        ClearUndoSnapshot();
+        Touch();
+    }
+
+    private void ApplyModel(string bpmnXml, string? logicXml)
+    {
+        if (string.IsNullOrWhiteSpace(bpmnXml))
+        {
+            throw new ArgumentException("A simpleXflow model is required.", nameof(bpmnXml));
+        }
+
         BpmnXml = bpmnXml;
         LogicXml = string.IsNullOrWhiteSpace(logicXml) ? null : logicXml;
-        Touch();
+    }
+
+    private void CaptureUndoSnapshot()
+    {
+        PreviousName = Name;
+        PreviousBpmnXml = BpmnXml;
+        PreviousLogicXml = LogicXml;
+        PreviousUpdatedUtc = UpdatedUtc;
+    }
+
+    private void ClearUndoSnapshot()
+    {
+        PreviousName = null;
+        PreviousBpmnXml = null;
+        PreviousLogicXml = null;
+        PreviousUpdatedUtc = null;
     }
 
     private void Touch()

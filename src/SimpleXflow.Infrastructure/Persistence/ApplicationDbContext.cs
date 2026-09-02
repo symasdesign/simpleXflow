@@ -49,6 +49,7 @@ public class ApplicationDbContext(
             entity.HasKey(project => project.Id);
             entity.Property(project => project.Name).HasMaxLength(240).IsRequired();
             entity.Property(project => project.BpmnXml).IsRequired();
+            entity.Property(project => project.PreviousName).HasMaxLength(240);
             entity.HasIndex(project => new { project.TenantId, project.Name }).IsUnique();
             entity.HasQueryFilter(project => !tenantContext.IsAvailable || project.TenantId == tenantContext.TenantId);
 

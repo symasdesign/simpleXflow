@@ -56,7 +56,7 @@
             {
                 <div class="empty-state project-empty-state">
                     <strong>No saved projects yet</strong>
-                    <span>The draft above is ready. Name it, model the structure, then save it.</span>
+                    <span>Create the first project. It is saved immediately and can be edited afterwards.</span>
                 </div>
             }
         }
@@ -94,7 +94,8 @@
                         @ImportLabel
                         <InputFile id="project-import-file" OnChange="ImportProjectAsync" accept=".bpmn,.xml,.zip" class="import-file-input" />
                     </label>
-                    <button type="button" class="primary-action" @onclick="SaveAsync" disabled="@(isSaving || isImporting)">@SaveLabel</button>
+                    <button type="button" class="secondary-action" @onclick="UndoAsync" disabled="@UndoDisabled">@UndoLabel</button>
+                    <button type="button" class="primary-action" @onclick="SaveAsync" disabled="@(isSaving || isImporting || isUndoing)">@SaveLabel</button>
                 </div>
             </div>
 
@@ -125,7 +126,7 @@
                 </div>
                 <div>
                     <strong>3. Save</strong>
-                    <span>Save the simpleXflow project in this tenant workspace.</span>
+                    <span>Save changes to the tenant workspace. Undo restores the last saved version.</span>
                 </div>
             </div>
         }
@@ -163,6 +164,8 @@
     private IReadOnlyList<ProjectSummary> projects = [];
     private bool isSaving;
     private bool isImporting;
+    private bool isUndoing;
+    private bool canUndo;
     private string? statusMessage;
     private string? editorReadWarning;
     private string? selectedSampleId;
@@ -180,11 +183,15 @@
 
     private string SaveLabel => isSaving ? "Saving..." : "Save";
 
+    private string UndoLabel => isUndoing ? "Undoing..." : "Undo";
+
+    private bool UndoDisabled => !ProjectId.HasValue || !canUndo || isSaving || isImporting || isUndoing;
+
     private string ImportLabel => isImporting ? "Importing..." : "Import";
 
     private string HelpText => ProjectId.HasValue
         ? "Edit the simpleXflow project and save your changes to this tenant workspace."
-        : "Name the project, model the first structure, then save it to the tenant workspace.";
+        : "Create a project to save it immediately in this tenant workspace, then model its structure.";
 
     private string EditorPanelClass =>
         isFullScreen ? "editor-panel is-fullscreen" : "editor-panel";
@@ -197,6 +204,14 @@
     protected override async Task OnParametersSetAsync()
     {
         projects = await ProjectService.GetProjectsAsync();
+
+        if (!ProjectId.HasValue
+            && string.IsNullOrWhiteSpace(SampleId)
+            && projects.Count > 0)
+        {
+            NavigateWithFreshEditor(GetProjectHref(projects[0].Id));
+            return;
+        }
 
         if (ProjectId is { } id)
         {
@@ -211,6 +226,7 @@
             form.BpmnXml = project.BpmnXml;
             form.LogicXml = project.LogicXml ?? "";
             form.LogicTargetElementId = null;
+            canUndo = project.CanUndo;
 
             if (loadedProjectId != id)
             {
@@ -256,22 +272,39 @@
         form.BpmnXml = DefaultBpmnXml;
         form.LogicXml = "";
         form.LogicTargetElementId = null;
+        canUndo = false;
         loadedProjectId = null;
         loadedSampleId = null;
         editorRevision++;
     }
 
-    private Task StartNewProjectAsync()
+    private async Task StartNewProjectAsync()
     {
-        pendingSample = null;
-        PrepareNewProject();
-        statusMessage = "New simpleXflow project draft ready. Give it a name, model the structure, then save it.";
-        if (ProjectId.HasValue || !string.IsNullOrWhiteSpace(SampleId))
+        if (isSaving)
         {
-            NavigateWithFreshEditor("/projects");
+            return;
         }
 
-        return Task.CompletedTask;
+        pendingSample = null;
+        isSaving = true;
+        statusMessage = "Creating saved simpleXflow project...";
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var createdProjectId = await ProjectService.CreateProjectAsync(
+                new CreateProjectRequest("New project", DefaultBpmnXml));
+
+            NavigateWithFreshEditor($"/projects/{createdProjectId}");
+        }
+        catch (Exception ex)
+        {
+            statusMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
     private Task RequestSampleLoadAsync()
@@ -325,6 +358,7 @@
         form.BpmnXml = sample.BpmnXml;
         form.LogicXml = sample.LogicXml ?? "";
         form.LogicTargetElementId = sample.LogicTargetElementId;
+        canUndo = false;
         selectedSampleId = sample.Id;
         loadedProjectId = null;
         loadedSampleId = sample.Id;
@@ -350,6 +384,8 @@
             if (ProjectId is { } id)
             {
                 await ProjectService.UpdateProjectAsync(id, new UpdateProjectRequest(form.Name, form.BpmnXml, form.LogicXml));
+                var savedProject = await ProjectService.GetProjectAsync(id);
+                canUndo = savedProject?.CanUndo == true;
                 statusMessage = editorReadWarning ?? "Project saved.";
             }
             else
@@ -369,6 +405,47 @@
         finally
         {
             isSaving = false;
+        }
+    }
+
+    private async Task UndoAsync()
+    {
+        if (ProjectId is not { } id || !canUndo)
+        {
+            statusMessage = "Undo is available after saving a change to this project.";
+            return;
+        }
+
+        isUndoing = true;
+        statusMessage = "Restoring previous saved version...";
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await ProjectService.UndoProjectAsync(id);
+            var project = await ProjectService.GetProjectAsync(id)
+                ?? throw new InvalidOperationException("The requested project does not exist in this tenant.");
+
+            form.Name = project.Name;
+            form.BpmnXml = project.BpmnXml;
+            form.LogicXml = project.LogicXml ?? "";
+            form.LogicTargetElementId = null;
+            canUndo = project.CanUndo;
+            loadedProjectId = id;
+            loadedSampleId = null;
+            selectedSampleId = null;
+            editorRevision++;
+
+            projects = await ProjectService.GetProjectsAsync();
+            statusMessage = "Previous saved version restored.";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = ex.Message;
+        }
+        finally
+        {
+            isUndoing = false;
         }
     }
 

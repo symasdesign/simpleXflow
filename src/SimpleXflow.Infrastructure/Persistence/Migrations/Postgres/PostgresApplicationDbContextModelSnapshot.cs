@@ -215,6 +215,19 @@ namespace SimpleXflow.Infrastructure.Persistence.Migrations.Postgres
                         .HasMaxLength(240)
                         .HasColumnType("character varying(240)");
 
+                    b.Property<string>("PreviousBpmnXml")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PreviousLogicXml")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PreviousName")
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)");
+
+                    b.Property<DateTimeOffset?>("PreviousUpdatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 

@@ -35,6 +35,7 @@ public sealed class FlowProjectService(
                 project.Name,
                 project.BpmnXml,
                 project.LogicXml,
+                project.PreviousBpmnXml != null && project.PreviousBpmnXml != "",
                 project.CreatedUtc,
                 project.UpdatedUtc))
             .SingleOrDefaultAsync(cancellationToken);
@@ -59,8 +60,18 @@ public sealed class FlowProjectService(
         var project = await dbContext.Projects.SingleOrDefaultAsync(project => project.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("The requested project does not exist in this tenant.");
 
-        project.Rename(request.Name);
-        project.UpdateModel(request.BpmnXml, request.LogicXml);
+        project.UpdateProject(request.Name, request.BpmnXml, request.LogicXml);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UndoProjectAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        EnsureTenant();
+
+        var project = await dbContext.Projects.SingleOrDefaultAsync(project => project.Id == id, cancellationToken)
+            ?? throw new InvalidOperationException("The requested project does not exist in this tenant.");
+
+        project.UndoLastChange();
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 

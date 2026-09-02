@@ -9,4 +9,6 @@ public interface IFlowProjectService
     Task<Guid> CreateProjectAsync(CreateProjectRequest request, CancellationToken cancellationToken = default);
 
     Task UpdateProjectAsync(Guid id, UpdateProjectRequest request, CancellationToken cancellationToken = default);
+
+    Task UndoProjectAsync(Guid id, CancellationToken cancellationToken = default);
 }

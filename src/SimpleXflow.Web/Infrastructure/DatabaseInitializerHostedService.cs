@@ -166,6 +166,10 @@ internal sealed class DatabaseInitializer(
                     [Name] nvarchar(240) NOT NULL,
                     [BpmnXml] nvarchar(max) NOT NULL,
                     [LogicXml] nvarchar(max) NULL,
+                    [PreviousName] nvarchar(240) NULL,
+                    [PreviousBpmnXml] nvarchar(max) NULL,
+                    [PreviousLogicXml] nvarchar(max) NULL,
+                    [PreviousUpdatedUtc] datetimeoffset NULL,
                     [CreatedUtc] datetimeoffset NOT NULL,
                     [UpdatedUtc] datetimeoffset NOT NULL,
                     CONSTRAINT [PK_Projects] PRIMARY KEY ([Id])
@@ -176,6 +180,30 @@ internal sealed class DatabaseInitializer(
                AND COL_LENGTH(N'[dbo].[Projects]', N'LogicXml') IS NULL
             BEGIN
                 ALTER TABLE [dbo].[Projects] ADD [LogicXml] nvarchar(max) NULL;
+            END;
+
+            IF OBJECT_ID(N'[dbo].[Projects]', N'U') IS NOT NULL
+               AND COL_LENGTH(N'[dbo].[Projects]', N'PreviousName') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[Projects] ADD [PreviousName] nvarchar(240) NULL;
+            END;
+
+            IF OBJECT_ID(N'[dbo].[Projects]', N'U') IS NOT NULL
+               AND COL_LENGTH(N'[dbo].[Projects]', N'PreviousBpmnXml') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[Projects] ADD [PreviousBpmnXml] nvarchar(max) NULL;
+            END;
+
+            IF OBJECT_ID(N'[dbo].[Projects]', N'U') IS NOT NULL
+               AND COL_LENGTH(N'[dbo].[Projects]', N'PreviousLogicXml') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[Projects] ADD [PreviousLogicXml] nvarchar(max) NULL;
+            END;
+
+            IF OBJECT_ID(N'[dbo].[Projects]', N'U') IS NOT NULL
+               AND COL_LENGTH(N'[dbo].[Projects]', N'PreviousUpdatedUtc') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[Projects] ADD [PreviousUpdatedUtc] datetimeoffset NULL;
             END;
 
             IF OBJECT_ID(N'[dbo].[Projects]', N'U') IS NOT NULL

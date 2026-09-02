@@ -101,6 +101,71 @@ public sealed class FlowProjectServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateProjectAsync_StoresUndoSnapshotForProject()
+    {
+        var tenant = Tenant.Create("Tenant A");
+        await using var setupContext = CreateContext(null);
+        await setupContext.Database.EnsureCreatedAsync();
+        setupContext.Tenants.Add(tenant);
+        await setupContext.SaveChangesAsync();
+
+        await using var tenantContext = CreateContext(tenant.Id);
+        var service = new FlowProjectService(tenantContext, new TestTenantContext(tenant.Id));
+
+        var projectId = await service.CreateProjectAsync(new CreateProjectRequest("Original", "<old />"));
+        await service.UpdateProjectAsync(projectId, new UpdateProjectRequest("Changed", "<new />", "<logic />"));
+
+        var project = await service.GetProjectAsync(projectId);
+        Assert.NotNull(project);
+        Assert.Equal("Changed", project.Name);
+        Assert.Equal("<new />", project.BpmnXml);
+        Assert.Equal("<logic />", project.LogicXml);
+        Assert.True(project.CanUndo);
+    }
+
+    [Fact]
+    public async Task UndoProjectAsync_RestoresPreviousSavedVersion()
+    {
+        var tenant = Tenant.Create("Tenant A");
+        await using var setupContext = CreateContext(null);
+        await setupContext.Database.EnsureCreatedAsync();
+        setupContext.Tenants.Add(tenant);
+        await setupContext.SaveChangesAsync();
+
+        await using var tenantContext = CreateContext(tenant.Id);
+        var service = new FlowProjectService(tenantContext, new TestTenantContext(tenant.Id));
+
+        var projectId = await service.CreateProjectAsync(new CreateProjectRequest("Original", "<old />"));
+        await service.UpdateProjectAsync(projectId, new UpdateProjectRequest("Changed", "<new />", "<logic />"));
+        await service.UndoProjectAsync(projectId);
+
+        var project = await service.GetProjectAsync(projectId);
+        Assert.NotNull(project);
+        Assert.Equal("Original", project.Name);
+        Assert.Equal("<old />", project.BpmnXml);
+        Assert.Null(project.LogicXml);
+        Assert.False(project.CanUndo);
+    }
+
+    [Fact]
+    public async Task UndoProjectAsync_RejectsProjectWithoutUndoSnapshot()
+    {
+        var tenant = Tenant.Create("Tenant A");
+        await using var setupContext = CreateContext(null);
+        await setupContext.Database.EnsureCreatedAsync();
+        setupContext.Tenants.Add(tenant);
+        await setupContext.SaveChangesAsync();
+
+        await using var tenantContext = CreateContext(tenant.Id);
+        var service = new FlowProjectService(tenantContext, new TestTenantContext(tenant.Id));
+
+        var projectId = await service.CreateProjectAsync(new CreateProjectRequest("Original", "<old />"));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.UndoProjectAsync(projectId));
+        Assert.Contains("no saved change", exception.Message);
+    }
+
+    [Fact]
     public async Task SaveChangesAsync_RejectsChangingDataForAnotherTenant()
     {
         var tenantA = Tenant.Create("Tenant A");

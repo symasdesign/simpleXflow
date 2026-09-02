@@ -10,6 +10,7 @@ public sealed record ProjectDetail(
     string Name,
     string BpmnXml,
     string? LogicXml,
+    bool CanUndo,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc);
 
