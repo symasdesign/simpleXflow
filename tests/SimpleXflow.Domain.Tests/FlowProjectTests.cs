@@ -39,7 +39,7 @@ public sealed class FlowProjectTests
     }
 
     [Fact]
-    public void UpdateProject_CapturesSavedVersion()
+    public void UpdateProject_AutosavesCurrentStateWithoutVersionSnapshot()
     {
         var project = new FlowProject(Guid.NewGuid(), "Original", "<old />");
 
@@ -48,42 +48,29 @@ public sealed class FlowProjectTests
         Assert.Equal("Changed", project.Name);
         Assert.Equal("<new />", project.BpmnXml);
         Assert.Equal("<logic />", project.LogicXml);
-        Assert.True(project.CanUndo);
-        var version = Assert.Single(project.Versions);
-        Assert.Equal("Original", version.Name);
-        Assert.Equal("<old />", version.BpmnXml);
+        Assert.False(project.CanUndo);
+        Assert.Empty(project.Versions);
     }
 
     [Fact]
-    public void UndoLastChange_RestoresSavedVersionsStepByStep()
+    public void UndoLastChange_RejectsProjectWithoutSavedVersion()
     {
         var project = new FlowProject(Guid.NewGuid(), "Original", "<old />");
-        project.UpdateProject("Changed", "<new />", "<logic />");
-        project.UpdateProject("Changed again", "<newer />", "<newer-logic />");
 
-        project.UndoLastChange();
-
-        Assert.Equal("Changed", project.Name);
-        Assert.Equal("<new />", project.BpmnXml);
-        Assert.Equal("<logic />", project.LogicXml);
-        Assert.True(project.CanUndo);
-
-        project.UndoLastChange();
-
-        Assert.Equal("Original", project.Name);
-        Assert.Equal("<old />", project.BpmnXml);
-        Assert.Null(project.LogicXml);
-        Assert.False(project.CanUndo);
+        var exception = Assert.Throws<InvalidOperationException>(project.UndoLastChange);
+        Assert.Contains("no saved change", exception.Message);
     }
 
     [Fact]
     public void UpdateProject_DoesNotCreateUndoVersionWhenNothingChanged()
     {
         var project = new FlowProject(Guid.NewGuid(), "Original", "<old />");
+        var previousUpdatedUtc = project.UpdatedUtc;
 
         project.UpdateProject(" Original ", " <old /> ", null);
 
         Assert.Empty(project.Versions);
         Assert.False(project.CanUndo);
+        Assert.Equal(previousUpdatedUtc, project.UpdatedUtc);
     }
 }

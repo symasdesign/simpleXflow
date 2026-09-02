@@ -59,15 +59,10 @@ public sealed class FlowProjectService(
         EnsureTenant();
 
         var project = await dbContext.Projects
-            .Include(project => project.Versions)
             .SingleOrDefaultAsync(project => project.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("The requested project does not exist in this tenant.");
 
-        var existingVersions = project.Versions.ToList();
-        var existingVersionIds = existingVersions.Select(version => version.Id).ToHashSet();
         project.UpdateProject(request.Name, request.BpmnXml, request.LogicXml);
-        TrackNewVersions(project, existingVersionIds);
-        RemoveDroppedVersions(project, existingVersions);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -107,14 +102,6 @@ public sealed class FlowProjectService(
         }
 
         return candidate;
-    }
-
-    private void TrackNewVersions(FlowProject project, HashSet<Guid> existingVersionIds)
-    {
-        foreach (var version in project.Versions.Where(version => !existingVersionIds.Contains(version.Id)))
-        {
-            dbContext.Entry(version).State = EntityState.Added;
-        }
     }
 
     private void RemoveDroppedVersions(FlowProject project, IReadOnlyCollection<ProjectVersion> existingVersions)

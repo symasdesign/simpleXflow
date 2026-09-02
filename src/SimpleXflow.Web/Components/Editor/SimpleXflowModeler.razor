@@ -1,3 +1,7 @@
+@using Microsoft.JSInterop
+
+@implements IAsyncDisposable
+
 @inject IJSRuntime JSRuntime
 
 @if (!string.IsNullOrWhiteSpace(errorMessage))
@@ -141,6 +145,11 @@
     [Parameter]
     public bool IsFullScreen { get; set; }
 
+    [Parameter]
+    public EventCallback OnModelChanged { get; set; }
+
+    private DotNetObjectReference<SimpleXflowModeler>? dotNetReference;
+
     protected override bool ShouldRender() => allowRender;
 
     protected override async Task OnParametersSetAsync()
@@ -187,6 +196,8 @@
             loadedRevision = Revision;
             loadedFullScreen = IsFullScreen;
             await JSRuntime.InvokeVoidAsync("simpleXflowEditor.initialize", HostId, Xml, LogicXml, LogicTargetElementId);
+            dotNetReference ??= DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("simpleXflowEditor.watchChanges", HostId, dotNetReference);
             initialized = true;
             errorMessage = null;
             allowRender = false;
@@ -229,5 +240,33 @@
         {
             // The legacy editor can render without an explicit resize callback.
         }
+    }
+
+    [JSInvokable]
+    public async Task NotifyModelChangedAsync()
+    {
+        if (OnModelChanged.HasDelegate)
+        {
+            await OnModelChanged.InvokeAsync();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (dotNetReference is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("simpleXflowEditor.unwatchChanges", HostId);
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser connection can already be gone during teardown.
+        }
+
+        dotNetReference.Dispose();
     }
 }

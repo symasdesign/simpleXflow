@@ -8,6 +8,8 @@
 @using System.IO.Compression
 @using SimpleXflow.Application.Projects
 
+@implements IDisposable
+
 @inject IFlowProjectService ProjectService
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
@@ -39,7 +41,7 @@
                 {
                     <button type="button" class="project-row active draft" @onclick="StartNewProjectAsync">
                         <span>@DraftName</span>
-                        <small>Unsaved draft</small>
+                        <small>Click to create</small>
                     </button>
                 }
 
@@ -67,6 +69,7 @@
         {
             <div class="fullscreen-action-bar">
                 <span>@form.Name</span>
+                <span class="@AutoSaveIndicatorClass">@AutoSaveText</span>
                 <button type="button" class="secondary-action" @onclick="ToggleFullScreen">Exit full screen</button>
             </div>
         }
@@ -89,13 +92,12 @@
                         </select>
                         <button type="button" class="secondary-action" @onclick="RequestSampleLoadAsync" disabled="@string.IsNullOrWhiteSpace(selectedSampleId)">Load</button>
                     </div>
+                    <div class="@AutoSaveIndicatorClass" aria-live="polite">@AutoSaveText</div>
                     <button type="button" class="secondary-action" @onclick="ToggleFullScreen">Full screen</button>
                     <label class="secondary-action import-action" title="Import simpleXflow project">
                         @ImportLabel
                         <InputFile id="project-import-file" OnChange="ImportProjectAsync" accept=".bpmn,.xml,.zip" class="import-file-input" />
                     </label>
-                    <button type="button" class="secondary-action" title="Restore the previous saved project version" @onclick="UndoAsync" disabled="@UndoDisabled">@UndoLabel</button>
-                    <button type="button" class="primary-action" title="@SaveTitle" @onclick="SaveAsync" disabled="@(isSaving || isImporting || isUndoing)">@SaveLabel</button>
                 </div>
             </div>
 
@@ -110,7 +112,7 @@
 
                 <label>
                     Name
-                    <input type="text" @bind="form.Name" @bind:event="oninput" class="form-control" />
+                    <input type="text" value="@form.Name" @oninput="OnNameChangedAsync" class="form-control" />
                 </label>
 
             </EditForm>
@@ -125,13 +127,13 @@
                     <span>Select an element to edit properties, requirements and validations.</span>
                 </div>
                 <div>
-                    <strong>3. Save</strong>
-                    <span>Save a project version. Undo steps back through saved versions.</span>
+                    <strong>3. Autosave</strong>
+                    <span>Every valid change is saved automatically to the tenant workspace.</span>
                 </div>
             </div>
         }
 
-        <SimpleXflowModeler ProjectName="@form.Name" Xml="@form.BpmnXml" LogicXml="@form.LogicXml" LogicTargetElementId="@form.LogicTargetElementId" Revision="@editorRevision" IsFullScreen="@isFullScreen" />
+        <SimpleXflowModeler ProjectName="@form.Name" Xml="@form.BpmnXml" LogicXml="@form.LogicXml" LogicTargetElementId="@form.LogicTargetElementId" Revision="@editorRevision" IsFullScreen="@isFullScreen" OnModelChanged="OnEditorModelChangedAsync" />
     </section>
 </section>
 
@@ -143,7 +145,7 @@
             <h2 id="replace-sample-title">Replace current model?</h2>
             <p>
                 Loading <strong>@pendingSample.Name</strong> replaces the model currently shown in the editor.
-                Existing saved projects are only changed if you press Save afterwards.
+                The replacement is saved automatically after you confirm.
             </p>
             <div class="confirmation-actions">
                 <button type="button" class="secondary-action" @onclick="CancelSampleLoad">Cancel</button>
@@ -161,19 +163,22 @@
     public string? SampleId { get; set; }
 
     private readonly ProjectForm form = new();
+    private const int AutosaveDelayMilliseconds = 650;
     private IReadOnlyList<ProjectSummary> projects = [];
     private bool isSaving;
     private bool isImporting;
-    private bool isUndoing;
-    private bool canUndo;
+    private bool hasPendingAutosave;
     private string? statusMessage;
     private string? editorReadWarning;
+    private string? autosaveError;
     private string? selectedSampleId;
     private ProjectSample? pendingSample;
     private bool isFullScreen;
     private int editorRevision;
     private Guid? loadedProjectId;
     private string? loadedSampleId;
+    private DateTimeOffset? lastAutosavedUtc;
+    private CancellationTokenSource? autosaveDelayCts;
 
     private string DraftName => string.IsNullOrWhiteSpace(form.Name) ? "New project" : form.Name;
 
@@ -181,20 +186,40 @@
 
     private string ModeLabel => ProjectId.HasValue ? "Edit project" : "Create project";
 
-    private string SaveLabel => isSaving ? "Saving..." : ProjectId.HasValue ? "Save version" : "Create project";
-
-    private string SaveTitle => ProjectId.HasValue
-        ? "Save the current project as a new restorable version"
-        : "Create this project in the tenant workspace";
-
-    private string UndoLabel => isUndoing ? "Undoing..." : "Undo version";
-
-    private bool UndoDisabled => !ProjectId.HasValue || !canUndo || isSaving || isImporting || isUndoing;
-
     private string ImportLabel => isImporting ? "Importing..." : "Import";
 
+    private string AutoSaveText
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(autosaveError))
+            {
+                return autosaveError;
+            }
+
+            if (isSaving)
+            {
+                return "Autosaving...";
+            }
+
+            if (lastAutosavedUtc is { } savedUtc)
+            {
+                return $"Saved {savedUtc.ToLocalTime():HH:mm:ss}";
+            }
+
+            return ProjectId.HasValue ? "Autosave ready" : "Create a project to start autosave";
+        }
+    }
+
+    private string AutoSaveIndicatorClass =>
+        !string.IsNullOrWhiteSpace(autosaveError)
+            ? "autosave-indicator has-error"
+            : isSaving
+                ? "autosave-indicator is-saving"
+                : "autosave-indicator is-saved";
+
     private string HelpText => ProjectId.HasValue
-        ? "Save creates a restorable project version. Undo steps back through saved versions; Ctrl+Z handles unsaved diagram edits."
+        ? "Changes are saved automatically. Use the editor's Ctrl+Z while modeling to reverse the last local diagram action."
         : "Create a project to save it immediately in this tenant workspace, then model its structure.";
 
     private string EditorPanelClass =>
@@ -230,13 +255,14 @@
             form.BpmnXml = GetValidBpmnXmlOrDefault(project.BpmnXml);
             form.LogicXml = project.LogicXml ?? "";
             form.LogicTargetElementId = null;
-            canUndo = project.CanUndo;
 
             if (loadedProjectId != id)
             {
                 loadedProjectId = id;
                 loadedSampleId = null;
                 statusMessage = null;
+                autosaveError = null;
+                lastAutosavedUtc = project.UpdatedUtc;
                 selectedSampleId = null;
                 editorRevision++;
             }
@@ -249,6 +275,8 @@
                 if (sample is not null)
                 {
                     LoadSampleDraft(sample);
+                    await AutosaveNowAsync(GetSampleSavedMessage(sample), readEditor: false);
+                    return;
                 }
                 else if (string.IsNullOrWhiteSpace(form.BpmnXml))
                 {
@@ -276,7 +304,8 @@
         form.BpmnXml = DefaultBpmnXml;
         form.LogicXml = "";
         form.LogicTargetElementId = null;
-        canUndo = false;
+        autosaveError = null;
+        lastAutosavedUtc = null;
         loadedProjectId = null;
         loadedSampleId = null;
         editorRevision++;
@@ -284,7 +313,7 @@
 
     private async Task StartNewProjectAsync()
     {
-        if (isSaving)
+        if (isSaving || isImporting)
         {
             return;
         }
@@ -325,24 +354,18 @@
         return Task.CompletedTask;
     }
 
-    private Task ConfirmSampleLoadAsync()
+    private async Task ConfirmSampleLoadAsync()
     {
         var sample = pendingSample;
         pendingSample = null;
 
         if (sample is null)
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        if (ProjectId.HasValue)
-        {
-            NavigateWithFreshEditor($"/projects?sample={Uri.EscapeDataString(sample.Id)}");
-            return Task.CompletedTask;
-        }
-
-        LoadSampleDraft(sample);
-        return Task.CompletedTask;
+        LoadSampleDraft(sample, ProjectId.HasValue);
+        await AutosaveNowAsync(GetSampleSavedMessage(sample), readEditor: false);
     }
 
     private void CancelSampleLoad()
@@ -355,103 +378,135 @@
         isFullScreen = !isFullScreen;
     }
 
-    private void LoadSampleDraft(ProjectSample sample)
+    private void LoadSampleDraft(ProjectSample sample, bool keepCurrentProject = false)
     {
         pendingSample = null;
         form.Name = sample.Name;
         form.BpmnXml = sample.BpmnXml;
         form.LogicXml = sample.LogicXml ?? "";
         form.LogicTargetElementId = sample.LogicTargetElementId;
-        canUndo = false;
         selectedSampleId = sample.Id;
-        loadedProjectId = null;
+        loadedProjectId = keepCurrentProject ? ProjectId : null;
         loadedSampleId = sample.Id;
+        autosaveError = null;
         editorRevision++;
         statusMessage = string.IsNullOrWhiteSpace(form.LogicXml)
-            ? $"{sample.Name} loaded as draft. Review it, adapt if needed, then save it to the tenant workspace."
-            : $"{sample.Name} loaded as draft with architecture and Room1 logic. Select Room1 or open the Logic/Split view to inspect the room-level behavior.";
+            ? $"{sample.Name} loaded. Autosave is updating the project."
+            : $"{sample.Name} loaded with architecture and Room1 logic. Autosave is updating the project.";
     }
 
-    private async Task SaveAsync()
+    private static string GetSampleSavedMessage(ProjectSample sample) =>
+        string.IsNullOrWhiteSpace(sample.LogicXml)
+            ? $"{sample.Name} loaded and saved."
+            : $"{sample.Name} loaded and saved with architecture and Room1 logic.";
+
+    private async Task OnNameChangedAsync(ChangeEventArgs args)
     {
+        form.Name = args.Value?.ToString() ?? "";
+        await ScheduleAutosaveAsync();
+    }
+
+    private Task OnEditorModelChangedAsync()
+    {
+        return ScheduleAutosaveAsync();
+    }
+
+    private Task ScheduleAutosaveAsync()
+    {
+        if (isImporting)
+        {
+            return Task.CompletedTask;
+        }
+
+        autosaveError = null;
+        autosaveDelayCts?.Cancel();
+        autosaveDelayCts?.Dispose();
+
+        var delayCts = new CancellationTokenSource();
+        autosaveDelayCts = delayCts;
+        _ = AutosaveAfterDelayAsync(delayCts);
+
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private async Task AutosaveAfterDelayAsync(CancellationTokenSource delayCts)
+    {
+        try
+        {
+            await Task.Delay(AutosaveDelayMilliseconds, delayCts.Token);
+            await InvokeAsync(() => AutosaveNowAsync());
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer change superseded this autosave run.
+        }
+        catch (Exception ex)
+        {
+            await InvokeAsync(() =>
+            {
+                autosaveError = $"Autosave failed: {ex.Message}";
+                StateHasChanged();
+            });
+        }
+    }
+
+    private async Task AutosaveNowAsync(string? successMessage = null, bool readEditor = true)
+    {
+        if (isImporting)
+        {
+            return;
+        }
+
+        if (isSaving)
+        {
+            hasPendingAutosave = true;
+            return;
+        }
+
         isSaving = true;
-        statusMessage = "Saving simpleXflow project...";
+        autosaveError = null;
         editorReadWarning = null;
         await InvokeAsync(StateHasChanged);
 
         try
         {
             ValidateForm();
-            form.BpmnXml = await GetEditorXmlOrFallbackAsync();
-            form.LogicXml = await GetEditorLogicOrFallbackAsync();
+
+            if (readEditor)
+            {
+                form.BpmnXml = await GetEditorXmlOrFallbackAsync();
+                form.LogicXml = await GetEditorLogicOrFallbackAsync();
+            }
 
             if (ProjectId is { } id)
             {
                 await ProjectService.UpdateProjectAsync(id, new UpdateProjectRequest(form.Name, form.BpmnXml, form.LogicXml));
-                var savedProject = await ProjectService.GetProjectAsync(id);
-                canUndo = savedProject?.CanUndo == true;
-                statusMessage = editorReadWarning ?? "Project saved.";
+                projects = await ProjectService.GetProjectsAsync();
+                lastAutosavedUtc = DateTimeOffset.UtcNow;
+                statusMessage = editorReadWarning ?? successMessage;
             }
             else
             {
                 var createdProjectId = await ProjectService.CreateProjectAsync(new CreateProjectRequest(form.Name, form.BpmnXml, form.LogicXml));
-                statusMessage = editorReadWarning ?? "Project saved.";
+                lastAutosavedUtc = DateTimeOffset.UtcNow;
+                statusMessage = editorReadWarning ?? successMessage;
                 NavigateWithFreshEditor($"/projects/{createdProjectId}");
                 return;
             }
-
-            projects = await ProjectService.GetProjectsAsync();
         }
         catch (Exception ex)
         {
-            statusMessage = ex.Message;
+            autosaveError = $"Autosave failed: {ex.Message}";
         }
         finally
         {
             isSaving = false;
         }
-    }
 
-    private async Task UndoAsync()
-    {
-        if (ProjectId is not { } id || !canUndo)
+        if (hasPendingAutosave)
         {
-            statusMessage = "Save a changed project first. Undo then restores saved versions step by step.";
-            return;
-        }
-
-        isUndoing = true;
-        statusMessage = "Restoring previous saved version...";
-        await InvokeAsync(StateHasChanged);
-
-        try
-        {
-            await ProjectService.UndoProjectAsync(id);
-            var project = await ProjectService.GetProjectAsync(id)
-                ?? throw new InvalidOperationException("The requested project does not exist in this tenant.");
-
-            form.Name = project.Name;
-            form.BpmnXml = GetValidBpmnXmlOrDefault(project.BpmnXml);
-            form.LogicXml = project.LogicXml ?? "";
-            form.LogicTargetElementId = null;
-            canUndo = project.CanUndo;
-            loadedProjectId = id;
-            loadedSampleId = null;
-            selectedSampleId = null;
-            editorRevision++;
-
-            projects = await ProjectService.GetProjectsAsync();
-            statusMessage = canUndo
-                ? "Previous saved version restored. You can undo another saved version."
-                : "Previous saved version restored. This is the oldest saved version for this project.";
-        }
-        catch (Exception ex)
-        {
-            statusMessage = ex.Message;
-        }
-        finally
-        {
-            isUndoing = false;
+            hasPendingAutosave = false;
+            await ScheduleAutosaveAsync();
         }
     }
 
@@ -606,10 +661,16 @@
         NavigationManager.NavigateTo(uri, forceLoad: true);
     }
 
+    public void Dispose()
+    {
+        autosaveDelayCts?.Cancel();
+        autosaveDelayCts?.Dispose();
+    }
+
     private sealed class ProjectForm
     {
-        [System.ComponentModel.DataAnnotations.Required]
-        [System.ComponentModel.DataAnnotations.StringLength(240, MinimumLength = 2)]
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Project name is required.")]
+        [System.ComponentModel.DataAnnotations.StringLength(240, MinimumLength = 2, ErrorMessage = "Use at least 2 characters for the project name.")]
         public string Name { get; set; } = "";
 
         [System.ComponentModel.DataAnnotations.Required]

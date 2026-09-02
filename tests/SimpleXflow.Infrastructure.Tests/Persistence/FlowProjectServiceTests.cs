@@ -101,7 +101,7 @@ public sealed class FlowProjectServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task UpdateProjectAsync_StoresUndoVersionForProject()
+    public async Task UpdateProjectAsync_AutosavesProjectWithoutUndoVersion()
     {
         var tenant = Tenant.Create("Tenant A");
         await using var setupContext = CreateContext(null);
@@ -120,11 +120,14 @@ public sealed class FlowProjectServiceTests : IDisposable
         Assert.Equal("Changed", project.Name);
         Assert.Equal("<new />", project.BpmnXml);
         Assert.Equal("<logic />", project.LogicXml);
-        Assert.True(project.CanUndo);
+        Assert.False(project.CanUndo);
+
+        var versionCount = await tenantContext.ProjectVersions.CountAsync();
+        Assert.Equal(0, versionCount);
     }
 
     [Fact]
-    public async Task UndoProjectAsync_RestoresSavedVersionsStepByStep()
+    public async Task UpdateProjectAsync_DoesNotStoreUndoVersionsAcrossAutosaves()
     {
         var tenant = Tenant.Create("Tenant A");
         await using var setupContext = CreateContext(null);
@@ -138,23 +141,16 @@ public sealed class FlowProjectServiceTests : IDisposable
         var projectId = await service.CreateProjectAsync(new CreateProjectRequest("Original", "<old />"));
         await service.UpdateProjectAsync(projectId, new UpdateProjectRequest("Changed", "<new />", "<logic />"));
         await service.UpdateProjectAsync(projectId, new UpdateProjectRequest("Changed again", "<newer />", "<newer-logic />"));
-        await service.UndoProjectAsync(projectId);
 
         var project = await service.GetProjectAsync(projectId);
         Assert.NotNull(project);
-        Assert.Equal("Changed", project.Name);
-        Assert.Equal("<new />", project.BpmnXml);
-        Assert.Equal("<logic />", project.LogicXml);
-        Assert.True(project.CanUndo);
-
-        await service.UndoProjectAsync(projectId);
-
-        project = await service.GetProjectAsync(projectId);
-        Assert.NotNull(project);
-        Assert.Equal("Original", project.Name);
-        Assert.Equal("<old />", project.BpmnXml);
-        Assert.Null(project.LogicXml);
+        Assert.Equal("Changed again", project.Name);
+        Assert.Equal("<newer />", project.BpmnXml);
+        Assert.Equal("<newer-logic />", project.LogicXml);
         Assert.False(project.CanUndo);
+
+        var versionCount = await tenantContext.ProjectVersions.CountAsync();
+        Assert.Equal(0, versionCount);
     }
 
     [Fact]

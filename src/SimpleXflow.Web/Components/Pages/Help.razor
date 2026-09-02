@@ -31,8 +31,8 @@
                 <p>Use the editor palette to add events, tasks, gateways, resources, queues, buffers and annotations.</p>
             </article>
             <article>
-                <strong>3. Save intentionally</strong>
-                <p>Name the project, check the visual model, then save it into the current tenant workspace.</p>
+                <strong>3. Keep working</strong>
+                <p>Name the project and model visually. Valid changes are saved automatically in the tenant workspace.</p>
             </article>
         </div>
     </section>
@@ -99,15 +99,15 @@
             <h2>When nothing reacts</h2>
             <p>
                 Refresh the page once after a deployment. The Projects page runs as an interactive Blazor Server screen;
-                after the connection is active, plus, import, load and save respond immediately.
+                after the connection is active, plus, import, load and editor actions respond immediately.
             </p>
         </article>
         <article class="help-panel">
-            <span class="eyebrow">Save</span>
+            <span class="eyebrow">Autosave</span>
             <h2>What gets persisted</h2>
             <p>
-                Save reads XML from the visual editor. If the editor cannot return XML, simpleXflow saves the last known
-                model and shows a warning instead of losing the draft.
+                Autosave reads XML from the visual editor after valid changes. If the editor cannot return XML,
+                simpleXflow saves the last known model and shows a warning instead of losing work.
             </p>
         </article>
         <article class="help-panel">
@@ -122,7 +122,7 @@
             <span class="eyebrow">Demo</span>
             <h2>Recommended flow</h2>
             <p>
-                Load a sample, explain the visual model, adapt one element, then save it. This proves import, modeling,
+                Load a sample, explain the visual model, then adapt one element and watch the autosave status. This proves import, modeling,
                 tenant storage and presentation readiness in one short sequence.
             </p>
         </article>

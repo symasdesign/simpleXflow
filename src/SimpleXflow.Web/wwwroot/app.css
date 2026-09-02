@@ -265,6 +265,57 @@ h1:focus {
     gap: .55rem;
 }
 
+.autosave-indicator {
+    align-items: center;
+    border: 1px solid #d6e1ca;
+    border-radius: 999px;
+    color: #4a5f2f;
+    display: inline-flex;
+    font-size: .78rem;
+    font-weight: 700;
+    gap: .45rem;
+    min-height: 2.35rem;
+    padding: .35rem .65rem;
+    white-space: nowrap;
+}
+
+.autosave-indicator::before {
+    background: #6d8f3d;
+    border-radius: 999px;
+    content: "";
+    display: inline-block;
+    height: .55rem;
+    width: .55rem;
+}
+
+.autosave-indicator.is-saving::before {
+    animation: autosavePulse 1s ease-in-out infinite;
+    background: #d0922d;
+}
+
+.autosave-indicator.has-error {
+    border-color: #e4b9b1;
+    color: #9b3025;
+    max-width: min(28rem, 100%);
+    white-space: normal;
+}
+
+.autosave-indicator.has-error::before {
+    background: #c94737;
+}
+
+@keyframes autosavePulse {
+    0%, 100% {
+        opacity: .45;
+        transform: scale(.85);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
 .sample-action {
     align-items: center;
     display: inline-flex;
@@ -403,6 +454,11 @@ h1:focus {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.fullscreen-action-bar .autosave-indicator {
+    color: #4a5f2f;
+    overflow: visible;
 }
 
 .editor-form {

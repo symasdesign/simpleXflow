@@ -58,6 +58,7 @@ window.simpleXflowEditor = (() => {
       saveLogicRelay: async (xml) => {
         currentLogicXml = xml ?? "";
         emit("saveLogic", xml);
+        scheduleEditorChange(activeHostId);
       },
       openLogicRelay: async (xml) => {
         currentLogicXml = xml ?? "";
@@ -131,6 +132,85 @@ window.simpleXflowEditor = (() => {
 
   function dispatchEditorResize() {
     window.requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+  }
+
+  function getState(hostId) {
+    const state = editorStates.get(hostId) ?? {};
+    editorStates.set(hostId, state);
+    return state;
+  }
+
+  function suppressChangeNotifications(hostId, durationMs = 3200) {
+    if (!hostId) {
+      return;
+    }
+
+    const state = getState(hostId);
+    state.suppressChangesUntil = window.performance.now() + durationMs;
+  }
+
+  function shouldNotifyChanges(state) {
+    return !!state?.dotNetReference
+      && (!state.suppressChangesUntil || window.performance.now() > state.suppressChangesUntil);
+  }
+
+  function scheduleEditorChange(hostId) {
+    if (!hostId) {
+      return;
+    }
+
+    const state = getState(hostId);
+    if (!shouldNotifyChanges(state)) {
+      return;
+    }
+
+    window.clearTimeout(state.changeTimer);
+    state.changeTimer = window.setTimeout(() => {
+      if (!shouldNotifyChanges(state)) {
+        return;
+      }
+
+      state.dotNetReference
+        .invokeMethodAsync("NotifyModelChangedAsync")
+        .catch((error) => console.warn("Could not notify Blazor about a simpleXflow editor change.", error));
+    }, 250);
+  }
+
+  function installChangeObserver(hostId) {
+    const state = getState(hostId);
+    state.observer?.disconnect();
+    state.changeEventTargets?.forEach(({ target, listener }) => {
+      target.removeEventListener("input", listener, true);
+      target.removeEventListener("change", listener, true);
+    });
+
+    const canvas = document.getElementById("js-canvas");
+    const logicCanvas = document.getElementById("js-simbpmncanvas");
+    const propertiesPanel = document.getElementById("js-properties-panel");
+    const targets = [canvas, logicCanvas, propertiesPanel].filter(Boolean);
+
+    if (targets.length === 0) {
+      window.setTimeout(() => installChangeObserver(hostId), 250);
+      return;
+    }
+
+    state.observer = new MutationObserver(() => scheduleEditorChange(hostId));
+
+    for (const target of targets) {
+      state.observer.observe(target, {
+        attributes: true,
+        childList: true,
+        characterData: true,
+        subtree: true
+      });
+    }
+
+    const listener = () => scheduleEditorChange(hostId);
+    state.changeEventTargets = targets.map((target) => {
+      target.addEventListener("input", listener, true);
+      target.addEventListener("change", listener, true);
+      return { target, listener };
+    });
   }
 
   function hasRenderedArchitecture() {
@@ -275,7 +355,8 @@ window.simpleXflowEditor = (() => {
 
     const editorXml = normalizeArchitectureXml(attachLogicToElement(xml, logicXml, logicTargetElementId));
     activeHostId = hostId;
-    editorStates.set(hostId, { xml: editorXml, logicXml, logicTargetElementId });
+    suppressChangeNotifications(hostId);
+    editorStates.set(hostId, { ...getState(hostId), xml: editorXml, logicXml, logicTargetElementId });
     rememberArchitectureXml(editorXml);
     await waitForCallback("openXmlFile", 2500);
     replayOpenXml(editorXml, logicXml);
@@ -286,7 +367,8 @@ window.simpleXflowEditor = (() => {
   async function openXml(hostId, xml, logicXml, logicTargetElementId) {
     const editorXml = normalizeArchitectureXml(attachLogicToElement(xml, logicXml, logicTargetElementId));
     activeHostId = hostId;
-    editorStates.set(hostId, { xml: editorXml, logicXml, logicTargetElementId });
+    suppressChangeNotifications(hostId);
+    editorStates.set(hostId, { ...getState(hostId), xml: editorXml, logicXml, logicTargetElementId });
     rememberArchitectureXml(editorXml);
     await ensureBundle();
     await waitForCallback("openXmlFile", 2500);
@@ -351,6 +433,30 @@ window.simpleXflowEditor = (() => {
     });
   }
 
+  function watchChanges(hostId, dotNetReference) {
+    const state = getState(hostId);
+    state.dotNetReference = dotNetReference;
+    suppressChangeNotifications(hostId, 1200);
+    window.requestAnimationFrame(() => installChangeObserver(hostId));
+  }
+
+  function unwatchChanges(hostId) {
+    if (!hostId || !editorStates.has(hostId)) {
+      return;
+    }
+
+    const state = editorStates.get(hostId);
+    window.clearTimeout(state.changeTimer);
+    state.observer?.disconnect();
+    state.changeEventTargets?.forEach(({ target, listener }) => {
+      target.removeEventListener("input", listener, true);
+      target.removeEventListener("change", listener, true);
+    });
+    delete state.observer;
+    delete state.changeEventTargets;
+    delete state.dotNetReference;
+  }
+
   const translations = {
     Change: "Ändern",
     Specifications: "Spezifikationen",
@@ -368,6 +474,8 @@ window.simpleXflowEditor = (() => {
     openXml,
     getXml,
     getLogic,
-    resize
+    resize,
+    watchChanges,
+    unwatchChanges
   };
 })();

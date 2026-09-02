@@ -6,7 +6,6 @@ public sealed class FlowProject : ITenantEntity
 {
     private readonly List<ProjectAttachment> _attachments = [];
     private readonly List<ProjectVersion> _versions = [];
-    private const int MaxSavedVersions = 50;
 
     private FlowProject()
     {
@@ -66,11 +65,9 @@ public sealed class FlowProject : ITenantEntity
             && BpmnXml == normalizedBpmnXml
             && LogicXml == normalizedLogicXml)
         {
-            Touch();
             return;
         }
 
-        CaptureSavedVersion();
         Name = normalizedName;
         BpmnXml = normalizedBpmnXml;
         LogicXml = normalizedLogicXml;
@@ -122,24 +119,6 @@ public sealed class FlowProject : ITenantEntity
 
         BpmnXml = NormalizeModelXml(bpmnXml);
         LogicXml = string.IsNullOrWhiteSpace(logicXml) ? null : logicXml;
-    }
-
-    private void CaptureSavedVersion()
-    {
-        var nextVersionNumber = _versions.Count == 0
-            ? 1
-            : _versions.Max(version => version.VersionNumber) + 1;
-
-        _versions.Add(new ProjectVersion(TenantId, Id, nextVersionNumber, Name, BpmnXml, LogicXml));
-
-        while (_versions.Count > MaxSavedVersions)
-        {
-            var oldestVersion = _versions
-                .OrderBy(version => version.VersionNumber)
-                .First();
-
-            _versions.Remove(oldestVersion);
-        }
     }
 
     private void ClearUndoSnapshot()
