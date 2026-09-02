@@ -5,6 +5,8 @@ namespace SimpleXflow.Domain.Projects;
 public sealed class FlowProject : ITenantEntity
 {
     private readonly List<ProjectAttachment> _attachments = [];
+    private readonly List<ProjectVersion> _versions = [];
+    private const int MaxSavedVersions = 50;
 
     private FlowProject()
     {
@@ -44,7 +46,9 @@ public sealed class FlowProject : ITenantEntity
 
     public IReadOnlyCollection<ProjectAttachment> Attachments => _attachments;
 
-    public bool CanUndo => !string.IsNullOrWhiteSpace(PreviousBpmnXml);
+    public IReadOnlyCollection<ProjectVersion> Versions => _versions;
+
+    public bool CanUndo => _versions.Count > 0 || HasLegacyUndoSnapshot;
 
     public void Rename(string name)
     {
@@ -54,9 +58,22 @@ public sealed class FlowProject : ITenantEntity
 
     public void UpdateProject(string name, string bpmnXml, string? logicXml)
     {
-        CaptureUndoSnapshot();
-        Name = NormalizeName(name);
-        ApplyModel(bpmnXml, logicXml);
+        var normalizedName = NormalizeName(name);
+        var normalizedBpmnXml = NormalizeModelXml(bpmnXml);
+        var normalizedLogicXml = NormalizeLogicXml(logicXml);
+
+        if (Name == normalizedName
+            && BpmnXml == normalizedBpmnXml
+            && LogicXml == normalizedLogicXml)
+        {
+            Touch();
+            return;
+        }
+
+        CaptureSavedVersion();
+        Name = normalizedName;
+        BpmnXml = normalizedBpmnXml;
+        LogicXml = normalizedLogicXml;
         Touch();
     }
 
@@ -71,6 +88,20 @@ public sealed class FlowProject : ITenantEntity
         if (!CanUndo)
         {
             throw new InvalidOperationException("There is no saved change to undo for this project.");
+        }
+
+        var latestVersion = _versions
+            .OrderByDescending(version => version.VersionNumber)
+            .FirstOrDefault();
+
+        if (latestVersion is not null)
+        {
+            Name = latestVersion.Name;
+            BpmnXml = latestVersion.BpmnXml;
+            LogicXml = latestVersion.LogicXml;
+            _versions.Remove(latestVersion);
+            Touch();
+            return;
         }
 
         Name = PreviousName ?? Name;
@@ -93,12 +124,22 @@ public sealed class FlowProject : ITenantEntity
         LogicXml = string.IsNullOrWhiteSpace(logicXml) ? null : logicXml;
     }
 
-    private void CaptureUndoSnapshot()
+    private void CaptureSavedVersion()
     {
-        PreviousName = Name;
-        PreviousBpmnXml = BpmnXml;
-        PreviousLogicXml = LogicXml;
-        PreviousUpdatedUtc = UpdatedUtc;
+        var nextVersionNumber = _versions.Count == 0
+            ? 1
+            : _versions.Max(version => version.VersionNumber) + 1;
+
+        _versions.Add(new ProjectVersion(TenantId, Id, nextVersionNumber, Name, BpmnXml, LogicXml));
+
+        while (_versions.Count > MaxSavedVersions)
+        {
+            var oldestVersion = _versions
+                .OrderBy(version => version.VersionNumber)
+                .First();
+
+            _versions.Remove(oldestVersion);
+        }
     }
 
     private void ClearUndoSnapshot()
@@ -133,4 +174,11 @@ public sealed class FlowProject : ITenantEntity
 
         return bpmnXml.Trim();
     }
+
+    private static string? NormalizeLogicXml(string? logicXml)
+    {
+        return string.IsNullOrWhiteSpace(logicXml) ? null : logicXml.Trim();
+    }
+
+    private bool HasLegacyUndoSnapshot => !string.IsNullOrWhiteSpace(PreviousBpmnXml);
 }

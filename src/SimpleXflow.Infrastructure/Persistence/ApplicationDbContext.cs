@@ -20,6 +20,8 @@ public class ApplicationDbContext(
 
     public DbSet<ProjectAttachment> ProjectAttachments => Set<ProjectAttachment>();
 
+    public DbSet<ProjectVersion> ProjectVersions => Set<ProjectVersion>();
+
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -57,6 +59,14 @@ public class ApplicationDbContext(
                 .WithOne(attachment => attachment.Project)
                 .HasForeignKey(attachment => attachment.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(project => project.Versions)
+                .WithOne()
+                .HasForeignKey(version => version.FlowProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.Navigation(project => project.Versions)
+                .UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         builder.Entity<ProjectAttachment>(entity =>
@@ -66,6 +76,15 @@ public class ApplicationDbContext(
             entity.Property(attachment => attachment.ContentType).HasMaxLength(120).IsRequired();
             entity.Property(attachment => attachment.Content).IsRequired();
             entity.HasQueryFilter(attachment => !tenantContext.IsAvailable || attachment.TenantId == tenantContext.TenantId);
+        });
+
+        builder.Entity<ProjectVersion>(entity =>
+        {
+            entity.HasKey(version => version.Id);
+            entity.Property(version => version.Name).HasMaxLength(240).IsRequired();
+            entity.Property(version => version.BpmnXml).IsRequired();
+            entity.HasIndex(version => new { version.TenantId, version.FlowProjectId, version.VersionNumber }).IsUnique();
+            entity.HasQueryFilter(version => !tenantContext.IsAvailable || version.TenantId == tenantContext.TenantId);
         });
     }
 

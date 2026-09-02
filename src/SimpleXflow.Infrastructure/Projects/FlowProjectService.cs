@@ -35,7 +35,8 @@ public sealed class FlowProjectService(
                 project.Name,
                 project.BpmnXml,
                 project.LogicXml,
-                project.PreviousBpmnXml != null && project.PreviousBpmnXml != "",
+                dbContext.ProjectVersions.Any(version => version.FlowProjectId == project.Id)
+                    || (project.PreviousBpmnXml != null && project.PreviousBpmnXml != ""),
                 project.CreatedUtc,
                 project.UpdatedUtc))
             .SingleOrDefaultAsync(cancellationToken);
@@ -57,10 +58,16 @@ public sealed class FlowProjectService(
     {
         EnsureTenant();
 
-        var project = await dbContext.Projects.SingleOrDefaultAsync(project => project.Id == id, cancellationToken)
+        var project = await dbContext.Projects
+            .Include(project => project.Versions)
+            .SingleOrDefaultAsync(project => project.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("The requested project does not exist in this tenant.");
 
+        var existingVersions = project.Versions.ToList();
+        var existingVersionIds = existingVersions.Select(version => version.Id).ToHashSet();
         project.UpdateProject(request.Name, request.BpmnXml, request.LogicXml);
+        TrackNewVersions(project, existingVersionIds);
+        RemoveDroppedVersions(project, existingVersions);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -68,10 +75,14 @@ public sealed class FlowProjectService(
     {
         EnsureTenant();
 
-        var project = await dbContext.Projects.SingleOrDefaultAsync(project => project.Id == id, cancellationToken)
+        var project = await dbContext.Projects
+            .Include(project => project.Versions)
+            .SingleOrDefaultAsync(project => project.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("The requested project does not exist in this tenant.");
 
+        var existingVersions = project.Versions.ToList();
         project.UndoLastChange();
+        RemoveDroppedVersions(project, existingVersions);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -96,5 +107,20 @@ public sealed class FlowProjectService(
         }
 
         return candidate;
+    }
+
+    private void TrackNewVersions(FlowProject project, HashSet<Guid> existingVersionIds)
+    {
+        foreach (var version in project.Versions.Where(version => !existingVersionIds.Contains(version.Id)))
+        {
+            dbContext.Entry(version).State = EntityState.Added;
+        }
+    }
+
+    private void RemoveDroppedVersions(FlowProject project, IReadOnlyCollection<ProjectVersion> existingVersions)
+    {
+        var remainingVersionIds = project.Versions.Select(version => version.Id).ToHashSet();
+        var droppedVersions = existingVersions.Where(version => !remainingVersionIds.Contains(version.Id));
+        dbContext.ProjectVersions.RemoveRange(droppedVersions);
     }
 }

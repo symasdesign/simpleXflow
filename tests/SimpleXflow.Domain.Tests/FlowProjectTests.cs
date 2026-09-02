@@ -39,7 +39,7 @@ public sealed class FlowProjectTests
     }
 
     [Fact]
-    public void UpdateProject_CapturesPreviousSavedVersion()
+    public void UpdateProject_CapturesSavedVersion()
     {
         var project = new FlowProject(Guid.NewGuid(), "Original", "<old />");
 
@@ -49,21 +49,41 @@ public sealed class FlowProjectTests
         Assert.Equal("<new />", project.BpmnXml);
         Assert.Equal("<logic />", project.LogicXml);
         Assert.True(project.CanUndo);
-        Assert.Equal("Original", project.PreviousName);
-        Assert.Equal("<old />", project.PreviousBpmnXml);
+        var version = Assert.Single(project.Versions);
+        Assert.Equal("Original", version.Name);
+        Assert.Equal("<old />", version.BpmnXml);
     }
 
     [Fact]
-    public void UndoLastChange_RestoresPreviousSavedVersion()
+    public void UndoLastChange_RestoresSavedVersionsStepByStep()
     {
         var project = new FlowProject(Guid.NewGuid(), "Original", "<old />");
         project.UpdateProject("Changed", "<new />", "<logic />");
+        project.UpdateProject("Changed again", "<newer />", "<newer-logic />");
+
+        project.UndoLastChange();
+
+        Assert.Equal("Changed", project.Name);
+        Assert.Equal("<new />", project.BpmnXml);
+        Assert.Equal("<logic />", project.LogicXml);
+        Assert.True(project.CanUndo);
 
         project.UndoLastChange();
 
         Assert.Equal("Original", project.Name);
         Assert.Equal("<old />", project.BpmnXml);
         Assert.Null(project.LogicXml);
+        Assert.False(project.CanUndo);
+    }
+
+    [Fact]
+    public void UpdateProject_DoesNotCreateUndoVersionWhenNothingChanged()
+    {
+        var project = new FlowProject(Guid.NewGuid(), "Original", "<old />");
+
+        project.UpdateProject(" Original ", " <old /> ", null);
+
+        Assert.Empty(project.Versions);
         Assert.False(project.CanUndo);
     }
 }

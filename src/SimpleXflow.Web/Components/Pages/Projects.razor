@@ -94,8 +94,8 @@
                         @ImportLabel
                         <InputFile id="project-import-file" OnChange="ImportProjectAsync" accept=".bpmn,.xml,.zip" class="import-file-input" />
                     </label>
-                    <button type="button" class="secondary-action" @onclick="UndoAsync" disabled="@UndoDisabled">@UndoLabel</button>
-                    <button type="button" class="primary-action" @onclick="SaveAsync" disabled="@(isSaving || isImporting || isUndoing)">@SaveLabel</button>
+                    <button type="button" class="secondary-action" title="Restore the previous saved project version" @onclick="UndoAsync" disabled="@UndoDisabled">@UndoLabel</button>
+                    <button type="button" class="primary-action" title="@SaveTitle" @onclick="SaveAsync" disabled="@(isSaving || isImporting || isUndoing)">@SaveLabel</button>
                 </div>
             </div>
 
@@ -126,7 +126,7 @@
                 </div>
                 <div>
                     <strong>3. Save</strong>
-                    <span>Save changes to the tenant workspace. Undo restores the last saved version.</span>
+                    <span>Save a project version. Undo steps back through saved versions.</span>
                 </div>
             </div>
         }
@@ -181,16 +181,20 @@
 
     private string ModeLabel => ProjectId.HasValue ? "Edit project" : "Create project";
 
-    private string SaveLabel => isSaving ? "Saving..." : "Save";
+    private string SaveLabel => isSaving ? "Saving..." : ProjectId.HasValue ? "Save version" : "Create project";
 
-    private string UndoLabel => isUndoing ? "Undoing..." : "Undo";
+    private string SaveTitle => ProjectId.HasValue
+        ? "Save the current project as a new restorable version"
+        : "Create this project in the tenant workspace";
+
+    private string UndoLabel => isUndoing ? "Undoing..." : "Undo version";
 
     private bool UndoDisabled => !ProjectId.HasValue || !canUndo || isSaving || isImporting || isUndoing;
 
     private string ImportLabel => isImporting ? "Importing..." : "Import";
 
     private string HelpText => ProjectId.HasValue
-        ? "Edit the simpleXflow project and save your changes to this tenant workspace."
+        ? "Save creates a restorable project version. Undo steps back through saved versions; Ctrl+Z handles unsaved diagram edits."
         : "Create a project to save it immediately in this tenant workspace, then model its structure.";
 
     private string EditorPanelClass =>
@@ -412,7 +416,7 @@
     {
         if (ProjectId is not { } id || !canUndo)
         {
-            statusMessage = "Undo is available after saving a change to this project.";
+            statusMessage = "Save a changed project first. Undo then restores saved versions step by step.";
             return;
         }
 
@@ -437,7 +441,9 @@
             editorRevision++;
 
             projects = await ProjectService.GetProjectsAsync();
-            statusMessage = "Previous saved version restored.";
+            statusMessage = canUndo
+                ? "Previous saved version restored. You can undo another saved version."
+                : "Previous saved version restored. This is the oldest saved version for this project.";
         }
         catch (Exception ex)
         {

@@ -279,6 +279,46 @@ namespace SimpleXflow.Infrastructure.Persistence.Migrations.SqlServer
                     b.ToTable("ProjectAttachments");
                 });
 
+            modelBuilder.Entity("SimpleXflow.Domain.Projects.ProjectVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BpmnXml")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("FlowProjectId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("LogicXml")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("nvarchar(240)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FlowProjectId");
+
+                    b.HasIndex("TenantId", "FlowProjectId", "VersionNumber")
+                        .IsUnique();
+
+                    b.ToTable("ProjectVersions");
+                });
+
             modelBuilder.Entity("SimpleXflow.Domain.Tenants.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -499,6 +539,15 @@ namespace SimpleXflow.Infrastructure.Persistence.Migrations.SqlServer
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("SimpleXflow.Domain.Projects.ProjectVersion", b =>
+                {
+                    b.HasOne("SimpleXflow.Domain.Projects.FlowProject", null)
+                        .WithMany("Versions")
+                        .HasForeignKey("FlowProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SimpleXflow.Infrastructure.Identity.ApplicationUser", b =>
                 {
                     b.HasOne("SimpleXflow.Domain.Tenants.Tenant", "Tenant")
@@ -513,6 +562,8 @@ namespace SimpleXflow.Infrastructure.Persistence.Migrations.SqlServer
             modelBuilder.Entity("SimpleXflow.Domain.Projects.FlowProject", b =>
                 {
                     b.Navigation("Attachments");
+
+                    b.Navigation("Versions");
                 });
 
             modelBuilder.Entity("SimpleXflow.Domain.Tenants.Tenant", b =>
