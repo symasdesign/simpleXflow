@@ -3,6 +3,8 @@ window.simpleXflowEditor = (() => {
   const callbacks = new Map();
   const editorStates = new Map();
   let bundlePromise;
+  let activeHostId;
+  let currentArchitectureXml = "";
   let currentLogicXml = "";
   let openAttemptId = 0;
 
@@ -120,7 +122,60 @@ window.simpleXflowEditor = (() => {
 
   function hasRenderedArchitecture() {
     const canvas = document.getElementById("js-canvas");
-    return !!canvas?.querySelector("svg");
+    return !!canvas?.querySelector(".djs-element, .djs-shape, .djs-connection");
+  }
+
+  function getActiveEditorState() {
+    if (activeHostId && editorStates.has(activeHostId)) {
+      return editorStates.get(activeHostId);
+    }
+
+    let latestState;
+    for (const state of editorStates.values()) {
+      latestState = state;
+    }
+
+    return latestState;
+  }
+
+  function rememberArchitectureXml(xml) {
+    if (!xml?.trim()) {
+      return;
+    }
+
+    currentArchitectureXml = xml;
+
+    if (activeHostId) {
+      const state = editorStates.get(activeHostId) ?? {};
+      editorStates.set(activeHostId, { ...state, xml });
+    }
+  }
+
+  function getFallbackArchitectureXml() {
+    return currentArchitectureXml || getActiveEditorState()?.xml || "";
+  }
+
+  async function waitForCallback(name, timeoutMs) {
+    if (getCallbackList(name).length > 0) {
+      return true;
+    }
+
+    const startedAt = window.performance.now();
+
+    return new Promise((resolve) => {
+      const interval = window.setInterval(() => {
+        if (getCallbackList(name).length > 0) {
+          window.clearInterval(interval);
+          resolve(true);
+          return;
+        }
+
+        if (window.performance.now() - startedAt >= timeoutMs) {
+          window.clearInterval(interval);
+          resolve(false);
+        }
+      }, 50);
+    });
   }
 
   function openLogic(logicXml) {
@@ -152,7 +207,7 @@ window.simpleXflowEditor = (() => {
       }
     });
 
-    for (const delay of [120, 420, 900]) {
+    for (const delay of [120, 420, 900, 1500, 2500]) {
       window.setTimeout(() => {
         if (attemptId !== openAttemptId) {
           return;
@@ -197,7 +252,10 @@ window.simpleXflowEditor = (() => {
     }
 
     const editorXml = attachLogicToElement(xml, logicXml, logicTargetElementId);
+    activeHostId = hostId;
     editorStates.set(hostId, { xml: editorXml, logicXml, logicTargetElementId });
+    rememberArchitectureXml(editorXml);
+    await waitForCallback("openXmlFile", 2500);
     replayOpenXml(editorXml, logicXml);
     host.classList.add("is-ready");
     window.markAsClean?.();
@@ -205,32 +263,53 @@ window.simpleXflowEditor = (() => {
 
   async function openXml(hostId, xml, logicXml, logicTargetElementId) {
     const editorXml = attachLogicToElement(xml, logicXml, logicTargetElementId);
+    activeHostId = hostId;
     editorStates.set(hostId, { xml: editorXml, logicXml, logicTargetElementId });
+    rememberArchitectureXml(editorXml);
     await ensureBundle();
+    await waitForCallback("openXmlFile", 2500);
     replayOpenXml(editorXml, logicXml);
     window.markAsClean?.();
   }
 
   async function getXml() {
     await ensureBundle();
+    await waitForCallback("createXmlFile", 1000);
 
-    return new Promise((resolve, reject) => {
-      const timeout = window.setTimeout(
-        () => reject(new Error("The visual simpleXflow editor did not respond while saving.")),
-        3000);
+    return new Promise((resolve) => {
+      let settled = false;
+
+      const finish = (xml) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        window.clearTimeout(timeout);
+
+        const editorXml = xml?.trim() ? xml : getFallbackArchitectureXml();
+        rememberArchitectureXml(editorXml);
+        resolve(editorXml);
+      };
+
+      const timeout = window.setTimeout(() => finish(getFallbackArchitectureXml()), 3000);
 
       const event = {
         sender: {
           send: (channel, xml) => {
             if (channel === "xml-value") {
-              window.clearTimeout(timeout);
-              resolve(xml);
+              finish(xml);
             }
           }
         }
       };
 
-      emitRaw("createXmlFile", event);
+      try {
+        emitRaw("createXmlFile", event);
+      } catch (error) {
+        console.warn("Could not export the current simpleXflow model. Saving the last known model instead.", error);
+        finish(getFallbackArchitectureXml());
+      }
     });
   }
 

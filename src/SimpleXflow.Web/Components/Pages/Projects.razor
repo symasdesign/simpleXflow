@@ -110,7 +110,7 @@
 
                 <label>
                     Name
-                    <InputText @bind-Value="form.Name" class="form-control" />
+                    <input type="text" @bind="form.Name" @bind:event="oninput" class="form-control" />
                 </label>
 
             </EditForm>
