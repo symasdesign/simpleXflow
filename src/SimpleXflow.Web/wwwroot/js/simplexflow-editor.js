@@ -288,8 +288,23 @@ window.simpleXflowEditor = (() => {
     }
   }
 
+  function getDownloadLinkXml() {
+    const href = document.getElementById("js-download-diagram")?.getAttribute("href") ?? "";
+    const prefix = "data:application/bpmn20-xml;charset=UTF-8,";
+    if (!href.startsWith(prefix)) {
+      return "";
+    }
+
+    try {
+      return decodeURIComponent(href.slice(prefix.length)).trim();
+    } catch (error) {
+      console.warn("Could not decode the current simpleXflow download XML.", error);
+      return "";
+    }
+  }
+
   function getFallbackArchitectureXml() {
-    return normalizeArchitectureXml(currentArchitectureXml || getActiveEditorState()?.xml || "");
+    return normalizeArchitectureXml(getDownloadLinkXml() || currentArchitectureXml || getActiveEditorState()?.xml || "");
   }
 
   async function waitForCallback(name, timeoutMs) {
@@ -413,45 +428,12 @@ window.simpleXflowEditor = (() => {
 
   async function getXml() {
     await ensureBundle();
-    await waitForCallback("createXmlFile", 1000);
     suppressChangeNotifications(activeHostId, 1600);
 
-    return new Promise((resolve) => {
-      let settled = false;
-
-      const finish = (xml) => {
-        if (settled) {
-          return;
-        }
-
-        settled = true;
-        window.clearTimeout(timeout);
-
-        const editorXml = xml?.trim() ? normalizeArchitectureXml(xml) : getFallbackArchitectureXml();
-        rememberArchitectureXml(editorXml);
-        suppressChangeNotifications(activeHostId, 900);
-        resolve(editorXml);
-      };
-
-      const timeout = window.setTimeout(() => finish(getFallbackArchitectureXml()), 3000);
-
-      const event = {
-        sender: {
-          send: (channel, xml) => {
-            if (channel === "xml-value") {
-              finish(xml);
-            }
-          }
-        }
-      };
-
-      try {
-        emitRaw("createXmlFile", event);
-      } catch (error) {
-        console.warn("Could not export the current simpleXflow model. Saving the last known model instead.", error);
-        finish(getFallbackArchitectureXml());
-      }
-    });
+    const editorXml = getFallbackArchitectureXml();
+    rememberArchitectureXml(editorXml);
+    suppressChangeNotifications(activeHostId, 900);
+    return editorXml;
   }
 
   async function getLogic() {
