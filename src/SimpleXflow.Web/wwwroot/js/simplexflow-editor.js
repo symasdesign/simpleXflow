@@ -20,6 +20,7 @@ window.simpleXflowEditor = (() => {
   let currentArchitectureXml = "";
   let currentLogicXml = "";
   let openAttemptId = 0;
+  const decodeUriComponent = globalThis.decodeURIComponent?.bind(globalThis);
 
   function getCallbackList(name) {
     if (!callbacks.has(name)) {
@@ -178,10 +179,18 @@ window.simpleXflowEditor = (() => {
         return;
       }
 
-      const pendingXml = state.pendingXml ?? null;
+      let pendingXml = state.pendingXml ?? null;
       const pendingLogicXml = state.pendingLogicXml ?? null;
       state.pendingXml = null;
       state.pendingLogicXml = null;
+
+      if (!pendingXml) {
+        pendingXml = getDownloadLinkXml();
+      }
+
+      if (!pendingXml && pendingLogicXml === null) {
+        return;
+      }
 
       state.dotNetReference
         .invokeMethodAsync("NotifyModelChangedAsync", pendingXml, pendingLogicXml)
@@ -316,7 +325,7 @@ window.simpleXflowEditor = (() => {
     }
 
     try {
-      return decodeURIComponent(href.slice(prefix.length)).trim();
+      return decodeUriComponent(href.slice(prefix.length)).trim();
     } catch (error) {
       console.warn("Could not decode the current simpleXflow download XML.", error);
       return "";
