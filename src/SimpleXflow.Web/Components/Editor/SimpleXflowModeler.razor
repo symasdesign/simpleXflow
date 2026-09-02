@@ -159,9 +159,14 @@
             return;
         }
 
-        if (loadedXml != Xml || loadedLogicXml != LogicXml || loadedLogicTargetElementId != LogicTargetElementId || loadedRevision != Revision)
+        if (loadedRevision != Revision || loadedLogicTargetElementId != LogicTargetElementId)
         {
             await OpenXmlAsync();
+        }
+        else if (loadedXml != Xml || loadedLogicXml != LogicXml)
+        {
+            loadedXml = Xml;
+            loadedLogicXml = LogicXml;
         }
 
         if (loadedFullScreen != IsFullScreen)

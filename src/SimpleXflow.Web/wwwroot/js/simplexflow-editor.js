@@ -379,6 +379,7 @@ window.simpleXflowEditor = (() => {
   async function getXml() {
     await ensureBundle();
     await waitForCallback("createXmlFile", 1000);
+    suppressChangeNotifications(activeHostId, 1600);
 
     return new Promise((resolve) => {
       let settled = false;
@@ -393,6 +394,7 @@ window.simpleXflowEditor = (() => {
 
         const editorXml = xml?.trim() ? normalizeArchitectureXml(xml) : getFallbackArchitectureXml();
         rememberArchitectureXml(editorXml);
+        suppressChangeNotifications(activeHostId, 900);
         resolve(editorXml);
       };
 
