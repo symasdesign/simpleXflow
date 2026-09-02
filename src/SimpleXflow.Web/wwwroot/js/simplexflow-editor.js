@@ -248,7 +248,7 @@ window.simpleXflowEditor = (() => {
     await ensureBundle();
     const host = document.getElementById(hostId);
     if (!host) {
-      return;
+      throw new Error("The simpleXflow editor host is missing.");
     }
 
     const editorXml = attachLogicToElement(xml, logicXml, logicTargetElementId);

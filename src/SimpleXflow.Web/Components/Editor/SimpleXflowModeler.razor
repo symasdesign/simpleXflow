@@ -113,7 +113,7 @@
 </div>
 
 @code {
-    private readonly string HostId = $"simplexflow-editor-{Guid.NewGuid():N}";
+    private const string HostId = "simplexflow-editor";
     private bool initialized;
     private string? loadedXml;
     private string? loadedLogicXml;
