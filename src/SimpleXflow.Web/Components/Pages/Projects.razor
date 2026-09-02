@@ -407,8 +407,18 @@
         await ScheduleAutosaveAsync();
     }
 
-    private Task OnEditorModelChangedAsync()
+    private Task OnEditorModelChangedAsync(SimpleXflowModeler.EditorModelChange change)
     {
+        if (!string.IsNullOrWhiteSpace(change.BpmnXml))
+        {
+            form.BpmnXml = GetValidBpmnXmlOrDefault(change.BpmnXml);
+        }
+
+        if (change.LogicXml is not null)
+        {
+            form.LogicXml = change.LogicXml;
+        }
+
         return ScheduleAutosaveAsync();
     }
 
@@ -451,7 +461,7 @@
         }
     }
 
-    private async Task AutosaveNowAsync(string? successMessage = null, bool readEditor = true)
+    private async Task AutosaveNowAsync(string? successMessage = null, bool readEditor = false)
     {
         if (isImporting)
         {

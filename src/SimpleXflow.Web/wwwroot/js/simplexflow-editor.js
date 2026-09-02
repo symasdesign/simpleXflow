@@ -58,7 +58,7 @@ window.simpleXflowEditor = (() => {
       saveLogicRelay: async (xml) => {
         currentLogicXml = xml ?? "";
         emit("saveLogic", xml);
-        scheduleEditorChange(activeHostId);
+        scheduleEditorChange(activeHostId, null, currentLogicXml);
       },
       openLogicRelay: async (xml) => {
         currentLogicXml = xml ?? "";
@@ -154,7 +154,7 @@ window.simpleXflowEditor = (() => {
       && (!state.suppressChangesUntil || window.performance.now() > state.suppressChangesUntil);
   }
 
-  function scheduleEditorChange(hostId) {
+  function scheduleEditorChange(hostId, xml, logicXml) {
     if (!hostId) {
       return;
     }
@@ -164,14 +164,27 @@ window.simpleXflowEditor = (() => {
       return;
     }
 
+    if (xml?.trim()) {
+      state.pendingXml = normalizeArchitectureXml(xml);
+    }
+
+    if (logicXml !== undefined) {
+      state.pendingLogicXml = logicXml ?? "";
+    }
+
     window.clearTimeout(state.changeTimer);
     state.changeTimer = window.setTimeout(() => {
       if (!shouldNotifyChanges(state)) {
         return;
       }
 
+      const pendingXml = state.pendingXml ?? null;
+      const pendingLogicXml = state.pendingLogicXml ?? null;
+      state.pendingXml = null;
+      state.pendingLogicXml = null;
+
       state.dotNetReference
-        .invokeMethodAsync("NotifyModelChangedAsync")
+        .invokeMethodAsync("NotifyModelChangedAsync", pendingXml, pendingLogicXml)
         .catch((error) => console.warn("Could not notify Blazor about a simpleXflow editor change.", error));
     }, 250);
   }
@@ -244,7 +257,7 @@ window.simpleXflowEditor = (() => {
         const xml = getDownloadLinkXml();
         if (xml) {
           rememberArchitectureXml(xml);
-          scheduleEditorChange(hostId);
+          scheduleEditorChange(hostId, xml, currentLogicXml);
         }
       });
 

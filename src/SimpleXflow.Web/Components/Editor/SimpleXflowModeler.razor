@@ -149,7 +149,7 @@
     public bool IsFullScreen { get; set; }
 
     [Parameter]
-    public EventCallback OnModelChanged { get; set; }
+    public EventCallback<EditorModelChange> OnModelChanged { get; set; }
 
     private DotNetObjectReference<SimpleXflowModeler>? dotNetReference;
 
@@ -251,11 +251,11 @@
     }
 
     [JSInvokable]
-    public async Task NotifyModelChangedAsync()
+    public async Task NotifyModelChangedAsync(string? bpmnXml, string? logicXml)
     {
         if (OnModelChanged.HasDelegate)
         {
-            await OnModelChanged.InvokeAsync();
+            await OnModelChanged.InvokeAsync(new EditorModelChange(bpmnXml, logicXml));
         }
     }
 
@@ -276,5 +276,18 @@
         }
 
         dotNetReference.Dispose();
+    }
+
+    public sealed class EditorModelChange
+    {
+        public EditorModelChange(string? bpmnXml, string? logicXml)
+        {
+            BpmnXml = bpmnXml;
+            LogicXml = logicXml;
+        }
+
+        public string? BpmnXml { get; }
+
+        public string? LogicXml { get; }
     }
 }
