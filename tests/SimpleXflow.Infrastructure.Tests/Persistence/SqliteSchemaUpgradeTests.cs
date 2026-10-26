@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using SimpleXflow.Infrastructure.Persistence;
 using SimpleXflow.Infrastructure.Tests.Fakes;
+using SimpleXflow.Infrastructure.Tests.Fixtures;
 
 namespace SimpleXflow.Infrastructure.Tests.Persistence;
 
@@ -12,7 +13,7 @@ public sealed class SqliteSchemaUpgradeTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
-        await using var context = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlite(connection).Options, new TestTenantContext(null));
+        await using var context = new ApplicationDbContext(SqliteDatabase.CreateOptionsBuilder(connection).Options, new TestTenantContext(null));
         await context.Database.ExecuteSqlRawAsync("""
             CREATE TABLE "Projects" (
                 "Id" TEXT NOT NULL PRIMARY KEY, "TenantId" TEXT NOT NULL, "Name" TEXT NOT NULL,

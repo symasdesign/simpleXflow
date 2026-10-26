@@ -19,7 +19,8 @@ env:
 jobs:
   build-test-and-publish:
     name: Build, test, and publish container
-    runs-on: ubuntu-latest
+    # Playwright 1.58 supports Ubuntu 24.04, not the moving ubuntu-latest image.
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Check out repository

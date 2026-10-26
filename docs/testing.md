@@ -4,6 +4,10 @@ The baseline exercises domain rules, sample consistency, real relational persist
 imports, the JavaScript bridge and the complete Blazor workspace with the shipped modeler bundle.
 All default tests run locally without Azure, email delivery, Docker or production database access.
 
+Both GitHub Actions workflows pin `ubuntu-24.04`, which is supported by the locked Playwright 1.58.2
+version. Keep the runner image and browser dependency versions compatible when upgrading either;
+`ubuntu-latest` can advance to an unsupported distribution independently of this repository.
+
 Workspace collaboration update verified on Windows on 2026-10-26: **427 passing tests, none skipped**
 (391 .NET, 22 editor bridge/real-modeler, 14 end-to-end). The Release build has no warnings or errors.
 The browser flows cover the organization/workspace/project/folder hierarchy, model selection without
@@ -69,7 +73,9 @@ Existing servers are deliberately never reused. Playwright retries are disabled,
 ## Isolation and fixtures
 
 - Every SQLite persistence fixture owns a separate open in-memory connection. Tests verify results
-  through fresh contexts, rather than depending on EF's tracked objects.
+  through fresh contexts, rather than depending on EF's tracked objects. Direct contexts and Identity
+  service registrations use schema version 3, matching the app, so EF model caching cannot make
+  passkey mapping depend on test execution order.
 - Every HTTP test host uses its own temporary database, real Identity services and cookies. It replaces
   provider configuration before startup and removes the database when disposed.
 - Every browser run creates a unique database under `artifacts/browser/databases`; every test registers

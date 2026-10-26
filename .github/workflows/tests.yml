@@ -12,7 +12,8 @@ permissions:
 jobs:
   test:
     name: .NET and browser regression tests
-    runs-on: ubuntu-latest
+    # Keep browser dependencies on an OS supported by the pinned Playwright version.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
     - uses: actions/checkout@v4

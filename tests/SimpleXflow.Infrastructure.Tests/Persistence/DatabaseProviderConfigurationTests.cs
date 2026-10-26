@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -11,11 +12,37 @@ using SimpleXflow.Infrastructure.Identity;
 using SimpleXflow.Infrastructure.Persistence;
 using SimpleXflow.Infrastructure.Projects;
 using SimpleXflow.Infrastructure.Services;
+using SimpleXflow.Infrastructure.Tests.Fakes;
+using SimpleXflow.Infrastructure.Tests.Fixtures;
 
 namespace SimpleXflow.Infrastructure.Tests.Persistence;
 
 public sealed class DatabaseProviderConfigurationTests
 {
+    [Fact]
+    public void DirectSqliteContextBeforeIdentityRegistration_PreservesPasskeySchema()
+    {
+        // A fresh EF service provider makes the first model build deterministic.
+        using var efServices = new ServiceCollection().AddEntityFrameworkSqlite().BuildServiceProvider();
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        var options = SqliteDatabase.CreateOptionsBuilder(connection)
+            .UseInternalServiceProvider(efServices);
+        using var directContext = new ApplicationDbContext(options.Options, new TestTenantContext(null));
+        AssertIdentityAndDataProtectionMapping(directContext);
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddIdentityCore<ApplicationUser>(identity => identity.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
+            .AddEntityFrameworkStores<ApplicationDbContext>();
+        services.AddInfrastructure(Configuration("Sqlite", "Data Source=:memory:"));
+        services.AddDbContext<ApplicationDbContext>(builder => builder.UseInternalServiceProvider(efServices));
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var configuredContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        AssertIdentityAndDataProtectionMapping(configuredContext);
+        Assert.Same(directContext.Model, configuredContext.Model);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

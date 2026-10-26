@@ -87,7 +87,8 @@ public sealed class TenantIdentityTests : IDisposable
         services.AddLogging();
         services.AddSingleton<ITenantContext>(new TestTenantContext(database.TenantA));
         services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite(database.Connection));
-        services.AddIdentityCore<ApplicationUser>().AddEntityFrameworkStores<ApplicationDbContext>();
+        services.AddIdentityCore<ApplicationUser>(options => options.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
+            .AddEntityFrameworkStores<ApplicationDbContext>();
         services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, TenantClaimsPrincipalFactory>();
         return services.BuildServiceProvider(validateScopes: true);
     }

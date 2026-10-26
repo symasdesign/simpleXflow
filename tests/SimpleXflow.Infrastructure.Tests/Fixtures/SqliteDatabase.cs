@@ -1,5 +1,7 @@
 using Microsoft.Data.Sqlite;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using SimpleXflow.Domain.Projects;
 using SimpleXflow.Domain.Tenants;
 using SimpleXflow.Infrastructure.Persistence;
@@ -10,6 +12,10 @@ namespace SimpleXflow.Infrastructure.Tests.Fixtures;
 /// <summary>One relational database per test, shared by independent DbContexts.</summary>
 internal sealed class SqliteDatabase : IDisposable
 {
+    private static readonly ServiceProvider identityServices = new ServiceCollection()
+        .Configure<IdentityOptions>(options => options.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
+        .BuildServiceProvider();
+
     public SqliteConnection Connection { get; } = new("Data Source=:memory:;Foreign Keys=True");
     public Guid TenantA { get; }
     public Guid TenantB { get; }
@@ -29,8 +35,13 @@ internal sealed class SqliteDatabase : IDisposable
 
     // No tenant is used only for arrangement/verification, like administrative access.
     public ApplicationDbContext CreateContext(Guid? tenantId = null, string? userId = null) => new(
-        new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlite(Connection).Options,
+        CreateOptionsBuilder(Connection).Options,
         new TestTenantContext(tenantId, userId));
+
+    // Identity options affect EF's cached model, so direct contexts must match the web app.
+    public static DbContextOptionsBuilder<ApplicationDbContext> CreateOptionsBuilder(SqliteConnection connection) => new DbContextOptionsBuilder<ApplicationDbContext>()
+        .UseSqlite(connection)
+        .UseApplicationServiceProvider(identityServices);
 
     public async Task<Guid> SeedProjectAsync(Guid tenantId, string name = "Original", string xml = "<original />")
     {
