@@ -33,7 +33,8 @@ POSTGRES_CONNECTION_STRING=<Neon .NET/Npgsql connection string>
 
 ## Deploy the code image
 
-Pushes to `main` only build, test, and publish the image. To deploy a specific build:
+Pushes to `main` build, test, publish and automatically deploy the tested image. To select a previously
+published build manually, for example for a rollback:
 
 1. Open GitHub > Actions.
 2. Run `Deploy container to Azure`.

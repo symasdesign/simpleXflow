@@ -1,6 +1,12 @@
 name: Deploy container to Azure
 
 on:
+  workflow_call:
+    inputs:
+      image_tag:
+        description: "Immutable tag of the tested container image"
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       image_tag:
@@ -23,10 +29,36 @@ env:
 jobs:
   deploy:
     name: Deploy selected container image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: simplexflow-production
+      cancel-in-progress: false
+    env:
+      IMAGE_TAG: ${{ inputs.image_tag }}
 
     steps:
+    - name: Check deployment target
+      id: target
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if [[ ! "${IMAGE_TAG}" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]]; then
+          echo "::error::Invalid container image tag."
+          exit 1
+        fi
+        if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+          current_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')
+          if [[ "${current_sha}" != "${IMAGE_TAG}" ]]; then
+            echo "::notice::Skipping an older build because main has advanced."
+            echo "deploy=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+        fi
+        echo "deploy=true" >> "${GITHUB_OUTPUT}"
+
     - name: Log in to Azure
+      if: steps.target.outputs.deploy == 'true'
       uses: azure/login@v2
       with:
         client-id: ${{ env.AZURE_CLIENT_ID }}
@@ -34,18 +66,56 @@ jobs:
         subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
     - name: Deploy image to Container Apps
+      if: steps.target.outputs.deploy == 'true'
+      id: revision
       run: |
-        az containerapp update \
+        revision=$(az containerapp update \
           --resource-group "${AZURE_RESOURCE_GROUP}" \
           --name "${AZURE_CONTAINER_APP}" \
-          --image "${GHCR_IMAGE}:${{ inputs.image_tag }}"
+          --image "${GHCR_IMAGE}:${IMAGE_TAG}" \
+          --query "properties.latestRevisionName" --output tsv)
+        test -n "${revision}"
+        echo "name=${revision}" >> "${GITHUB_OUTPUT}"
 
-    - name: Show live URL
+    - name: Verify running revision and database health
+      if: steps.target.outputs.deploy == 'true'
+      env:
+        EXPECTED_REVISION: ${{ steps.revision.outputs.name }}
       run: |
+        for attempt in $(seq 1 30); do
+          ready=$(az containerapp show \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_CONTAINER_APP}" \
+            --query "properties.latestReadyRevisionName" --output tsv)
+          if [[ "${ready}" == "${EXPECTED_REVISION}" ]]; then
+            break
+          fi
+          if [[ "${attempt}" == "30" ]]; then
+            echo "::error::The deployed revision did not become ready."
+            exit 1
+          fi
+          sleep 10
+        done
+        routing=$(az containerapp show \
+          --resource-group "${AZURE_RESOURCE_GROUP}" \
+          --name "${AZURE_CONTAINER_APP}" \
+          --query '{mode:properties.configuration.activeRevisionsMode,traffic:properties.configuration.ingress.traffic}' \
+          --output json)
+        if ! jq -e --arg revision "${EXPECTED_REVISION}" \
+          '.mode == "Single" or ([.traffic[]? | select(.latestRevision == true or .revisionName == $revision) | .weight] | add) == 100' \
+          <<< "${routing}" > /dev/null; then
+          echo "::error::The ready revision does not receive all public traffic."
+          exit 1
+        fi
         fqdn=$(az containerapp show \
           --resource-group "${AZURE_RESOURCE_GROUP}" \
           --name "${AZURE_CONTAINER_APP}" \
           --query "properties.configuration.ingress.fqdn" \
           --output tsv)
 
-        echo "Deployed to https://${fqdn}"
+        for url in "https://${fqdn}/healthz/db" "https://simplexflow.ch/healthz/db"; do
+          curl --fail --show-error --silent --retry 12 --retry-delay 5 \
+            --retry-all-errors --max-time 30 "${url}"
+          echo
+        done
+        echo "Deployed ${GHCR_IMAGE}:${IMAGE_TAG} to https://${fqdn}"

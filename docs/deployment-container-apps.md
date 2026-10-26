@@ -30,11 +30,18 @@ ghcr.io/symasdesign/simplexflow:latest
 ghcr.io/symasdesign/simplexflow:<commit-sha>
 ```
 
-Pushes to `main` or `master` only build, test and publish the image. They do not deploy to Azure automatically.
+Pushes to `main` build, test and publish the image, then automatically deploy that exact commit's
+image to Azure. A failed build, test or image publication prevents deployment. Pushes to `master`
+and manual image builds publish only; production follows `main`.
+
+The image workflow calls the same deployment workflow used for manual releases. Deployments are
+serialized, and an automatic run skips an outdated build if `main` has advanced. Azure readiness,
+public traffic routing and `/healthz/db` on both the Azure hostname and `simplexflow.ch` are checked
+before deployment succeeds.
 
 ## Manual deployment
 
-After the image workflow is green, deploy manually from GitHub:
+For a deliberate rollback or a specific previously published build, deploy manually from GitHub:
 
 1. Open GitHub > Actions.
 2. Select `Deploy container to Azure`.
@@ -42,7 +49,7 @@ After the image workflow is green, deploy manually from GitHub:
 4. Use `latest` for the newest successful build, or paste a full commit SHA for a deterministic release.
 5. Open the Container App URL or custom domain after the workflow finishes.
 
-The manual deployment workflow updates this Azure Container App:
+Both automatic and manual deployment update this Azure Container App:
 
 ```text
 Resource group: rg-simplexflow

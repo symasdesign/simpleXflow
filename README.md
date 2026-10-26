@@ -26,7 +26,7 @@ simpleXflow is the Blazor WebApp successor for the former Electron-based modelin
 - In-app Help/Get Started page
 - Domain, application, persistence, HTTP, import, editor bridge and browser regression tests
 - GitHub Actions pipeline for build, test, and container image publishing
-- Manual Azure Container Apps deployment workflow
+- Automatic Azure Container Apps deployment after successful builds on main, with manual rollback
 
 ## Run
 

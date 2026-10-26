@@ -92,3 +92,14 @@ jobs:
         tags: |
           ${{ env.IMAGE_NAME }}:latest
           ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+  deploy:
+    name: Deploy tested image to Azure
+    needs: build-test-and-publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy-container-app.yml
+    with:
+      image_tag: ${{ github.sha }}
