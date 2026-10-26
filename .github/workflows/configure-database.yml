@@ -26,8 +26,14 @@ jobs:
   configure:
     name: Configure selected database provider
     runs-on: ubuntu-latest
+    concurrency:
+      group: simplexflow-production
+      cancel-in-progress: false
 
     steps:
+    - name: Check out budget guard
+      uses: actions/checkout@v4
+
     - name: Validate required secret
       shell: bash
       env:
@@ -50,11 +56,13 @@ jobs:
       env:
         POSTGRES_CONNECTION_STRING: ${{ secrets.POSTGRES_CONNECTION_STRING }}
       run: |
+        bash scripts/check-azure-budget.sh
         az containerapp secret set \
           --resource-group "${AZURE_RESOURCE_GROUP}" \
           --name "${AZURE_CONTAINER_APP}" \
           --secrets postgres-connection-string="${POSTGRES_CONNECTION_STRING}"
 
+        bash scripts/check-azure-budget.sh
         az containerapp update \
           --resource-group "${AZURE_RESOURCE_GROUP}" \
           --name "${AZURE_CONTAINER_APP}" \

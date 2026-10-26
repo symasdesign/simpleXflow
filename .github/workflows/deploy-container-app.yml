@@ -57,6 +57,10 @@ jobs:
         fi
         echo "deploy=true" >> "${GITHUB_OUTPUT}"
 
+    - name: Check out budget guard
+      if: steps.target.outputs.deploy == 'true'
+      uses: actions/checkout@v4
+
     - name: Log in to Azure
       if: steps.target.outputs.deploy == 'true'
       uses: azure/login@v2
@@ -69,6 +73,7 @@ jobs:
       if: steps.target.outputs.deploy == 'true'
       id: revision
       run: |
+        bash scripts/check-azure-budget.sh
         revision=$(az containerapp update \
           --resource-group "${AZURE_RESOURCE_GROUP}" \
           --name "${AZURE_CONTAINER_APP}" \

@@ -5,7 +5,8 @@
   "scripts": {
     "test": "playwright test --config playwright.bridge.config.js",
     "test:e2e": "playwright test",
-    "test:all": "npm test && npm run test:e2e",
+    "test:all": "npm run test:ci && npm test && npm run test:e2e",
+    "test:ci": "node --test scripts/check-azure-budget.test.mjs",
     "test:install": "playwright install chromium"
   },
   "devDependencies": {

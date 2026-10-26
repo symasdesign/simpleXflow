@@ -76,6 +76,20 @@ Scope: cae-simplexflow
 Purpose: allow Container Apps environment join checks while setting Container App secrets
 ```
 
+### Budget stop
+
+The `monthly-budget-stop` resource lock on `ca-simplexflow` blocks both image deployment
+and database configuration, including during the initial `CanNotDelete` stop phase.
+The workflows also require the app's `runningStatus` to be exactly `Running`. A failed
+or empty state query blocks changes. The shared guard runs immediately before every
+secret or app update; deployment and database configuration share one concurrency group.
+The GitHub Azure identity needs permission to read the app's resource locks, but must
+not be allowed to change or remove them. Run `npm run test:ci` for the isolated mock tests.
+
+After a budget stop, an operator must explicitly remove the lock and start the app.
+CI never clears a lock or starts a stopped app, including after a new month begins.
+Do not use a local CLI deployment to bypass a budget stop.
+
 Manual deployment from a local Azure CLI session is also possible:
 
 ```powershell
