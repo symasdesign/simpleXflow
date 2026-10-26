@@ -80,7 +80,14 @@
             @if (!string.IsNullOrWhiteSpace(autosaveError)) { <div class="conflict-banner" role="alert">@autosaveError <button class="secondary-action" @onclick="() => AutosaveNowAsync()">Retry save</button><button class="secondary-action" @onclick="RequestReload">Reload saved model</button><span>Save a local copy before reloading if you want to keep your edits.</span></div> }
             <div class="model-body">
                 <div class="@(!CanEdit ? "model-canvas is-readonly" : "model-canvas")">
-                    <SimpleXflowModeler ProjectName="@form.Name" Xml="@form.BpmnXml" LogicXml="@form.LogicXml" LogicTargetElementId="@form.LogicTargetElementId" Revision="@editorRevision" IsFullScreen="@isFullScreen" ReadOnly="@(!CanEdit || isImporting || isSwitchingModel)" OnModelChanged="OnEditorModelChangedAsync" OnDirty="OnEditorDirtyAsync" />
+                    @if (string.IsNullOrWhiteSpace(form.BpmnXml))
+                    {
+                        <p role="status">Loading model…</p>
+                    }
+                    else
+                    {
+                        <SimpleXflowModeler ProjectName="@form.Name" Xml="@form.BpmnXml" LogicXml="@form.LogicXml" LogicTargetElementId="@form.LogicTargetElementId" Revision="@editorRevision" IsFullScreen="@isFullScreen" ReadOnly="@(!CanEdit || isImporting || isSwitchingModel)" OnModelChanged="OnEditorModelChangedAsync" OnDirty="OnEditorDirtyAsync" />
+                    }
                 </div>
                 @if (showCollaboration && model is not null && workspace is not null)
                 {

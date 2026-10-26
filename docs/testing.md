@@ -8,8 +8,8 @@ Both GitHub Actions workflows pin `ubuntu-24.04`, which is supported by the lock
 version. Keep the runner image and browser dependency versions compatible when upgrading either;
 `ubuntu-latest` can advance to an unsupported distribution independently of this repository.
 
-Workspace collaboration update verified on Windows on 2026-10-26: **427 passing tests, none skipped**
-(391 .NET, 22 editor bridge/real-modeler, 14 end-to-end). The Release build has no warnings or errors.
+Workspace collaboration baseline verified in GitHub Actions on 2026-10-26: **428 passing tests, none skipped**
+(392 .NET, 22 editor bridge/real-modeler, 14 end-to-end).
 The browser flows cover the organization/workspace/project/folder hierarchy, model selection without
 fullscreen, autosave, conflict preservation, local `.sxf` export/import, invitation links, version releases,
 work packages, model deletion, legacy sample links and the header navigation with searchable workspace
@@ -17,11 +17,36 @@ cards/list, filters, sorting and direct member management. Real-modeler regressi
 Architecture-to-Logic resource synchronization, viewer restrictions and immediate dirty-state tracking.
 See [Workspace behavior and migration](workspaces.md) and [Email configuration](workspace-email.md).
 
-Verified on Windows on 2026-09-06: **385 passing tests, none skipped** (357 .NET, 18 editor bridge,
-10 end-to-end), Release build without warnings and successful web publish. Combined .NET line coverage:
-Application 100%, Domain 99.38%, Infrastructure 99.07%, Web 26.47%. The Web number excludes the separate
-browser process and retains the untested account/interactive paths in its denominator. The GitHub Linux
-workflow is configured but has not been executed remotely as part of this local change.
+The model-opening update adds 19 .NET cases and eight E2E cases. Verification on Windows on
+2026-10-26 passed **462 tests, none skipped**: 411 .NET, 22 editor bridge, 22 E2E and seven budget-guard
+tests from the integrated deployment update. Combined .NET line coverage: Application 94.81%, Domain 99.51%,
+Infrastructure 98.30%, Web 24.59%. The Web number excludes the separate browser process and retains
+untested account/interactive paths in its denominator; it must not be read as browser workflow coverage.
+
+## Model opening regression and coverage map
+
+The original model-opening regression requires an actual navigation sequence: open a model, return
+to its project through the breadcrumb, then click its row again. Loading a URL directly with
+`page.goto()` starts a fresh document and misses the stale editor instance. The regression therefore
+uses project rows, keyboard activation and breadcrumb navigation, and checks the selected model's
+distinct diagram IDs, labels and visible geometry. A changed URL, model name or ready marker alone
+does not prove that a model loaded.
+
+The suites cover these functional and nonfunctional areas together:
+
+| Area | Verified behavior |
+| --- | --- |
+| Accounts and access | Registration/login/logout, antiforgery, private organizations, cross-organization invitations, matching verified email, expiry/revocation/replacement, token hashing, role changes in existing sessions |
+| Workspace organization | Workspace/project creation, search/filter/sort/grid/list, project name scope, normalized nested folders, model selection and reopening, move and delete/cancel |
+| Model editing and persistence | Actual architecture/logic content, all templates, autosave, navigation with pending edits, reload, local backup/import, history restore and released snapshots |
+| Collaboration | Owner/admin/editor/viewer permissions, membership management, presence expiry, conflicting revisions, release planning, delegation, deadlines and protection of assigned work scope |
+| Data integrity | No-op saves, failed or cancelled writes, stale revisions, immutable releases, foreign version/model/package rejection and transaction rollback |
+| Input and output safety | XML/DTD rejection, bounded upload/ZIP expansion, traversal rejection, literal user names, sanitized health failures and anonymous-route protection |
+| UI resilience and usability | Diagram visibility without fullscreen, repeated navigation, keyboard opening, narrow viewport, editor loading/retry, uncaught browser errors and timeout-bounded operations |
+| Deployment | Successful tests gate image publication and automatic deployment; revision readiness, public traffic and both Azure/custom-domain database health are checked before deployment succeeds |
+
+This map describes exercised behavior, not a claim that every possible input, browser, timing or
+production load has been tested. The explicit boundaries below remain part of the test report.
 
 ## Run everything
 
@@ -110,7 +135,7 @@ npx playwright show-trace <path-to-trace.zip>
 
 The `Tests` GitHub Actions workflow runs on pull requests and main/master pushes and uploads reports
 even after failure. The container pipeline also runs both .NET and browser suites before image publishing.
-No workflow changes are applied to a remote repository by creating this test baseline locally.
+After successful image publication, pushes to `main` also run the automatic Azure deployment checks.
 
 ## Regression fixes included with this baseline
 
@@ -121,6 +146,8 @@ No workflow changes are applied to a remote repository by creating this test bas
 - Model updates normalize optional logic consistently, and three missing demo diagram edges are supplied.
 - Logic embedding preserves self-closing XML tags, and editor initialization can retry a failed bundle load.
 - Import validates the complete XML document and BPMN namespace, prohibits DTDs and limits ZIP expansion.
+- Model links in project lists and work packages start a fresh editor document; initialization waits
+  for the selected model's XML instead of opening an empty model while its data is still loading.
 
 ## Explicit boundaries
 
@@ -136,8 +163,10 @@ This is a regression baseline for the existing application, not proof that every
   model saves create snapshots; local diagram undo remains separate from saved history.
 - Import checks XML well-formedness and the BPMN definitions namespace; full BPMN XSD and simpleXflow
   semantic validation remain separate features.
-- Chromium is covered; Firefox/WebKit, accessibility audits, load tests, external providers, passkeys,
-  complete two-factor/email recovery flows and deployment smoke tests are not part of the default suite.
+- Chromium, basic keyboard navigation and narrow layouts are covered. Firefox/WebKit, a complete
+  WCAG audit, capacity/load testing, external providers, passkeys and complete two-factor/email
+  recovery flows are not part of the default suite. The deployment workflow checks readiness,
+  traffic and database health; authenticated production browser checks remain separate from local E2E.
 - Interactive UI behavior is covered through E2E tests; no separate bUnit suite or tests for each generated
   Identity screen are included. The vendored modeler's internal source is not unit-tested here.
 

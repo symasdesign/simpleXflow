@@ -91,7 +91,7 @@
                 @if (!string.IsNullOrWhiteSpace(task.Description)) { <p>@task.Description</p> }
                 <small>@(task.AssigneeEmail ?? "Unassigned")</small>
                 @if (task.DueUtc.HasValue) { <small class="@(IsOverdue(task) ? "overdue" : "")">Due @task.DueUtc.Value.ToLocalTime().ToString("d")</small> }
-                @if (Model is null && task.ModelId.HasValue) { <a class="text-button" href="@($"/projects/{task.ModelId}")">Open model</a> }
+                @if (Model is null && task.ModelId.HasValue) { <a class="text-button" href="@($"/projects/{task.ModelId}")" target="_top" data-enhance-nav="false">Open model</a> }
                 @if (CanManageWorkspace)
                 {
                     <button class="text-button" disabled="@busy" @onclick="() => EditTask(task)">Edit work package</button>

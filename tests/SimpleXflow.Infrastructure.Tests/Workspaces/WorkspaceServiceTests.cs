@@ -3,6 +3,7 @@ using SimpleXflow.Application.Workspaces;
 using SimpleXflow.Domain.Workspaces;
 using SimpleXflow.Infrastructure.Identity;
 using SimpleXflow.Infrastructure.Persistence;
+using SimpleXflow.Infrastructure.Projects;
 using SimpleXflow.Infrastructure.Tests.Fakes;
 using SimpleXflow.Infrastructure.Tests.Fixtures;
 using SimpleXflow.Infrastructure.Workspaces;
@@ -153,6 +154,169 @@ public sealed class WorkspaceServiceTests : IDisposable
         Assert.NotNull(model.WorkspaceProjectId);
         Assert.Equal(1, model.Revision);
         Assert.Single(await verify.WorkspaceProjects.Where(project => project.WorkspaceId == imported.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task InvitationReplacement_RevokesOldTokenAndStoresOnlyItsHash()
+    {
+        var workspaceId = await SeedAsync();
+        var owner = Service("owner");
+        var old = await owner.CreateInvitationAsync(workspaceId, "external@example.test", "Editor");
+        var replacement = await owner.CreateInvitationAsync(workspaceId, " EXTERNAL@example.test ", "Viewer");
+
+        Assert.NotEqual(old.Token, replacement.Token);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Service("external").AcceptInvitationAsync(old.Token));
+        Assert.Equal(replacement.Id, Assert.Single((await owner.GetWorkspaceAsync(workspaceId))!.Invitations).Id);
+        await Service("external").AcceptInvitationAsync(replacement.Token);
+        Assert.Equal("Viewer", Assert.Single(await Service("external").GetWorkspacesAsync()).Role);
+
+        await using var verify = database.CreateContext();
+        var persisted = await verify.WorkspaceInvitations.SingleAsync(item => item.Id == replacement.Id);
+        Assert.NotEqual(replacement.Token, persisted.TokenHash);
+        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(replacement.Token))), persisted.TokenHash);
+        Assert.NotNull(persisted.AcceptedUtc);
+    }
+
+    [Theory]
+    [InlineData("Viewer")]
+    [InlineData("Editor")]
+    public async Task NonManagers_CannotChangeMembershipOrSeePendingInvitations(string role)
+    {
+        var workspaceId = await SeedAsync();
+        var owner = Service("owner");
+        await Service("external").AcceptInvitationAsync((await owner.CreateInvitationAsync(workspaceId, "external@example.test", role)).Token);
+        var pending = await owner.CreateInvitationAsync(workspaceId, "outsider@example.test", "Editor");
+        var member = Service("external");
+
+        Assert.Empty((await member.GetWorkspaceAsync(workspaceId))!.Invitations);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => member.SetMemberRoleAsync(workspaceId, "external", "Admin"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => member.RemoveMemberAsync(workspaceId, "admin"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => member.RevokeInvitationAsync(workspaceId, pending.Id));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => member.CreateWorkPackageAsync(workspaceId, new("Unauthorized", "external", null)));
+
+        var unchanged = (await owner.GetWorkspaceAsync(workspaceId))!;
+        Assert.Equal(role, unchanged.Members.Single(item => item.UserId == "external").Role);
+        Assert.Contains(unchanged.Members, item => item.UserId == "admin" && item.Role == "Admin");
+        Assert.Equal(pending.Id, Assert.Single(unchanged.Invitations).Id);
+        Assert.Empty(unchanged.WorkPackages);
+    }
+
+    [Fact]
+    public async Task Viewer_CannotCreateProjectsOrFolders()
+    {
+        var workspaceId = await SeedAsync();
+        var owner = Service("owner");
+        var projectId = await owner.CreateProjectAsync(workspaceId, "Existing");
+        await Service("external").AcceptInvitationAsync((await owner.CreateInvitationAsync(workspaceId, "external@example.test", "Viewer")).Token);
+        var viewer = Service("external");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => viewer.CreateProjectAsync(workspaceId, "Unauthorized"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => viewer.CreateFolderAsync(projectId, "Unauthorized"));
+
+        var project = Assert.Single((await owner.GetWorkspaceAsync(workspaceId))!.Projects);
+        Assert.Equal(projectId, project.Id);
+        Assert.Empty(project.Folders);
+    }
+
+    [Fact]
+    public async Task FolderHierarchy_NormalizesSeparatorsAndCreatesEachAncestorOnce()
+    {
+        var workspaceId = await SeedAsync();
+        var owner = Service("owner");
+        var projectId = await owner.CreateProjectAsync(workspaceId, "Models");
+
+        await owner.CreateFolderAsync(projectId, " Design \\ Processes // Draft ");
+        await owner.CreateFolderAsync(projectId, "Design/Processes/Draft");
+        await owner.CreateFolderAsync(projectId, "Design/Processes/Released");
+
+        Assert.Equal(new[] { "Design", "Design/Processes", "Design/Processes/Draft", "Design/Processes/Released" },
+            Assert.Single((await owner.GetWorkspaceAsync(workspaceId))!.Projects).Folders);
+        await using var verify = database.CreateContext();
+        Assert.Equal(4, await verify.ModelFolders.CountAsync());
+    }
+
+    [Fact]
+    public async Task ProjectNames_AreUniqueWithinWorkspaceButReusableAcrossWorkspaces()
+    {
+        var workspaceId = await SeedAsync();
+        var owner = Service("owner");
+        await owner.CreateProjectAsync(workspaceId, "Models");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => owner.CreateProjectAsync(workspaceId, " Models "));
+        var otherWorkspace = await owner.CreateWorkspaceAsync("Other workspace");
+        await owner.CreateProjectAsync(otherWorkspace, "Models");
+
+        Assert.Single((await owner.GetWorkspaceAsync(workspaceId))!.Projects);
+        Assert.Single((await owner.GetWorkspaceAsync(otherWorkspace))!.Projects);
+    }
+
+    [Theory]
+    [InlineData("Title")]
+    [InlineData("Assignee")]
+    [InlineData("Description")]
+    [InlineData("Model")]
+    public async Task Assignee_CannotChangeDelegatedScope(string changedField)
+    {
+        var workspaceId = await SeedAsync();
+        var owner = Service("owner");
+        await Service("external").AcceptInvitationAsync((await owner.CreateInvitationAsync(workspaceId, "external@example.test", "Editor")).Token);
+        var request = new WorkPackageRequest("Review", "external", DateTimeOffset.UtcNow.AddDays(1), Description: "Check the design");
+        var id = await owner.CreateWorkPackageAsync(workspaceId, request);
+        var changed = changedField switch
+        {
+            "Title" => request with { Title = "Different work" },
+            "Assignee" => request with { AssigneeUserId = "admin" },
+            "Description" => request with { Description = "Different scope" },
+            _ => request with { ModelId = Guid.NewGuid() }
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Service("external").UpdateWorkPackageAsync(workspaceId, id, changed));
+
+        var persisted = Assert.Single((await owner.GetWorkspaceAsync(workspaceId))!.WorkPackages);
+        Assert.Equal(request.Title, persisted.Title);
+        Assert.Equal(request.AssigneeUserId, persisted.AssigneeUserId);
+        Assert.Equal(request.Description, persisted.Description);
+        Assert.Null(persisted.ModelId);
+        Assert.Equal(request.DueUtc, persisted.DueUtc);
+    }
+
+    [Fact]
+    public async Task WorkPackage_CannotReferenceModelOrPackageFromAnotherWorkspace()
+    {
+        var workspaceId = await SeedAsync();
+        var owner = Service("owner");
+        var otherWorkspace = await owner.CreateWorkspaceAsync("Other");
+        var otherProject = await owner.CreateProjectAsync(otherWorkspace, "Other models");
+        await using var context = database.CreateContext(database.TenantA, "owner");
+        var models = new FlowProjectService(context, new TestTenantContext(database.TenantA, "owner"));
+        var otherModel = await models.CreateProjectAsync(new("Other model", "<other />", WorkspaceProjectId: otherProject));
+        var request = new WorkPackageRequest("Review", "owner", null, ModelId: otherModel);
+        var otherPackage = await owner.CreateWorkPackageAsync(otherWorkspace, request);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => owner.CreateWorkPackageAsync(workspaceId, request));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => owner.UpdateWorkPackageAsync(workspaceId, otherPackage, request with { Title = "Changed" }));
+
+        Assert.Empty((await owner.GetWorkspaceAsync(workspaceId))!.WorkPackages);
+        Assert.Equal("Review", Assert.Single((await owner.GetWorkspaceAsync(otherWorkspace))!.WorkPackages).Title);
+    }
+
+    [Theory]
+    [InlineData("Unknown", 0)]
+    [InlineData("Open", 4001)]
+    public async Task InvalidWorkPackageUpdate_PreservesExistingData(string status, int descriptionLength)
+    {
+        var workspaceId = await SeedAsync();
+        var owner = Service("owner");
+        var request = new WorkPackageRequest("Review", "owner", DateTimeOffset.UtcNow.AddDays(1));
+        var id = await owner.CreateWorkPackageAsync(workspaceId, request);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => owner.UpdateWorkPackageAsync(workspaceId, id,
+            request with { Title = "Must not be persisted", Status = status, Description = new string('x', descriptionLength) }));
+        await owner.CreateProjectAsync(workspaceId, "Save another entity");
+
+        var persisted = Assert.Single((await Service("owner").GetWorkspaceAsync(workspaceId))!.WorkPackages);
+        Assert.Equal(request.Title, persisted.Title);
+        Assert.Equal(request.Status, persisted.Status);
+        Assert.Null(persisted.Description);
     }
 
     public void Dispose()

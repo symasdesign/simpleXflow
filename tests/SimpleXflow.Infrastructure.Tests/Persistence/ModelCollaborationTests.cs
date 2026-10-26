@@ -199,6 +199,129 @@ public sealed class ModelCollaborationTests : IDisposable
         await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
     }
 
+    [Fact]
+    public async Task Viewer_CannotMutateHistory_AndIsNotAdvertisedAsAnEditor()
+    {
+        var (_, _, model) = await ArrangeAsync("Viewer");
+        await using var ownerContext = database.CreateContext(database.TenantA, owner);
+        var ownerService = Service(ownerContext, database.TenantA, owner);
+        var version = Assert.Single(await ownerService.GetVersionsAsync(model));
+        await ownerService.HeartbeatAsync(model);
+        await using var viewerContext = database.CreateContext(database.TenantB, guest);
+        var viewerService = Service(viewerContext, database.TenantB, guest);
+
+        Assert.Equal(owner, Assert.Single(await viewerService.HeartbeatAsync(model)).UserId);
+        Assert.Equal(version.Id, Assert.Single(await viewerService.GetVersionsAsync(model)).Id);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => viewerService.CreateVersionAsync(model, "Unauthorized"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => viewerService.RestoreVersionAsync(model, version.Id, 0));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => viewerService.ReleaseVersionAsync(model, version.Id));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => viewerService.UndoProjectAsync(model));
+
+        await using var verification = database.CreateContext();
+        Assert.Equal(owner, Assert.Single(await verification.ModelEditingPresences.ToListAsync()).UserId);
+        Assert.Null(Assert.Single(await verification.ProjectVersions.ToListAsync()).ReleasedUtc);
+        Assert.Equal("<original />", (await ownerService.GetProjectAsync(model))!.BpmnXml);
+    }
+
+    [Fact]
+    public async Task RoleDowngrade_IsEnforcedOnAnAlreadyOpenCircuit()
+    {
+        var (workspace, _, model) = await ArrangeAsync();
+        await using var guestContext = database.CreateContext(database.TenantB, guest);
+        var guestService = Service(guestContext, database.TenantB, guest);
+        Assert.True((await guestService.GetProjectAsync(model))!.CanEdit);
+        await using (var ownerContext = database.CreateContext(database.TenantA, owner))
+            await new WorkspaceService(ownerContext, new TestTenantContext(database.TenantA, owner))
+                .SetMemberRoleAsync(workspace, guest, "Viewer");
+
+        Assert.False((await guestService.GetProjectAsync(model))!.CanEdit);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => guestService.UpdateProjectAsync(model, new("Unauthorized", "<changed />", null, 0)));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => guestService.CreateVersionAsync(model, "Unauthorized"));
+        Assert.Single(await guestService.GetVersionsAsync(model));
+        Assert.Equal("<original />", (await guestService.GetProjectAsync(model))!.BpmnXml);
+    }
+
+    [Fact]
+    public async Task UnchangedAutosave_DoesNotAdvanceRevisionOrCreateHistory()
+    {
+        var (_, _, model) = await ArrangeAsync();
+        await using var context = database.CreateContext(database.TenantA, owner);
+        var service = Service(context, database.TenantA, owner);
+        var before = (await service.GetProjectAsync(model))!;
+
+        Assert.Equal(before.Revision, await service.UpdateProjectAsync(model,
+            new(" Shared ", "  <original />  ", "  ", before.Revision)));
+
+        Assert.Equal(before, await service.GetProjectAsync(model));
+        Assert.Single(await service.GetVersionsAsync(model));
+    }
+
+    [Fact]
+    public async Task PlannedRelease_IsAnImmutableSnapshot_AndReleaseIsIdempotent()
+    {
+        var (_, _, model) = await ArrangeAsync();
+        await using var context = database.CreateContext(database.TenantA, owner);
+        var service = Service(context, database.TenantA, owner);
+        const string originalLogic = "{\"Task_1\":\"<logic-original />\"}";
+        await service.UpdateProjectAsync(model, new("Reviewed", "<reviewed />", originalLogic, 0));
+        var planned = DateTimeOffset.UtcNow.AddDays(7);
+        var versionId = await service.CreateVersionAsync(model, "Release 1", planned);
+        await service.UpdateProjectAsync(model, new("New draft", "<draft />", "<draft-logic />", 1));
+        await service.ReleaseVersionAsync(model, versionId);
+        var released = (await service.GetVersionsAsync(model)).Single(item => item.Id == versionId);
+        await service.ReleaseVersionAsync(model, versionId);
+
+        Assert.Equal(released, (await service.GetVersionsAsync(model)).Single(item => item.Id == versionId));
+        Assert.Equal(planned, released.PlannedReleaseUtc);
+        Assert.Equal("owner@example.test", released.CreatedBy);
+        Assert.Equal("owner@example.test", released.ReleasedBy);
+        Assert.NotNull(released.ReleasedUtc);
+        Assert.Equal("<draft />", (await service.GetProjectAsync(model))!.BpmnXml);
+        Assert.Equal(3, await service.RestoreVersionAsync(model, versionId, 2));
+        var restored = (await service.GetProjectAsync(model))!;
+        Assert.Equal("Reviewed", restored.Name);
+        Assert.Equal("<reviewed />", restored.BpmnXml);
+        Assert.Equal(originalLogic, restored.LogicXml);
+        Assert.Equal(5, (await service.GetVersionsAsync(model)).Count);
+    }
+
+    [Fact]
+    public async Task RestoreAndRelease_RejectVersionsFromAnotherModelAndStaleRevisions()
+    {
+        var (_, project, model) = await ArrangeAsync();
+        await using var context = database.CreateContext(database.TenantA, owner);
+        var service = Service(context, database.TenantA, owner);
+        var ownVersion = Assert.Single(await service.GetVersionsAsync(model));
+        var other = await service.CreateProjectAsync(new("Other", "<other />", WorkspaceProjectId: project));
+        var otherVersion = Assert.Single(await service.GetVersionsAsync(other));
+        await service.UpdateProjectAsync(model, new("Shared", "<latest />", null, 0));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.RestoreVersionAsync(model, ownVersion.Id, 0));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.RestoreVersionAsync(model, otherVersion.Id, 1));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ReleaseVersionAsync(model, otherVersion.Id));
+
+        Assert.Equal("<latest />", (await service.GetProjectAsync(model))!.BpmnXml);
+        Assert.Equal(2, (await service.GetVersionsAsync(model)).Count);
+        Assert.Null(Assert.Single(await service.GetVersionsAsync(other)).ReleasedUtc);
+    }
+
+    [Fact]
+    public async Task CancelledOperation_DoesNotWriteOrBlockLaterRequests()
+    {
+        var (_, _, model) = await ArrangeAsync();
+        await using var context = database.CreateContext(database.TenantA, owner);
+        var service = Service(context, database.TenantA, owner);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.UpdateProjectAsync(model,
+            new("Cancelled", "<cancelled />", null, 0), cancellation.Token));
+
+        Assert.Equal("<original />", (await service.GetProjectAsync(model))!.BpmnXml);
+        Assert.Equal(1, await service.UpdateProjectAsync(model, new("Saved", "<saved />", null, 0)));
+        Assert.Equal(2, (await service.GetVersionsAsync(model)).Count);
+    }
+
     private async Task<(Guid Workspace, Guid Project, Guid Model)> ArrangeAsync(string role = "Editor")
     {
         await SeedUsersAsync();

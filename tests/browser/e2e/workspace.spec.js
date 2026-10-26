@@ -71,6 +71,29 @@ async function saveRename(page, name) {
   await expect(page.locator('.collaboration-drawer')).toBeVisible();
   await page.getByRole('button', { name: 'Close collaboration' }).click();
 }
+async function expectDiagram(page, elementId, label) {
+  await editorReady(page);
+  const shape = page.locator(`#js-canvas .djs-shape[data-element-id="${elementId}"]`);
+  await expect(shape).toBeVisible();
+  await expect(page.locator('#js-canvas .djs-label').filter({ hasText: label }).first()).toBeVisible();
+  await expect.poll(async () => {
+    const canvas = await page.locator('#js-canvas').boundingBox();
+    const bounds = await shape.boundingBox();
+    return !!(canvas && bounds && bounds.width > 0 && bounds.x >= canvas.x && bounds.y >= canvas.y && bounds.x + bounds.width <= canvas.x + canvas.width && bounds.y + bounds.height <= canvas.y + canvas.height);
+  }, { message: 'The selected model is drawn inside its visible canvas' }).toBeTruthy();
+}
+async function editDiagramLabel(page, elementId, name) {
+  // Use the editor's hit target: group bounds can include the label, while .djs-visual is covered by it.
+  await page.locator(`#js-canvas .djs-element[data-element-id="${elementId}"] .djs-hit`).first().dblclick();
+  const label = page.locator('.djs-direct-editing-content');
+  await label.fill(name);
+  await label.press('Control+Enter');
+  await expect(label).toBeHidden();
+}
+async function projectBreadcrumb(page, name = 'Simulation project') {
+  await page.locator('.app-header').getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name, exact: true }).click();
+  await expect(page.locator('.hub-shell')).toHaveAttribute('data-interactive', 'true');
+}
 
 test('anonymous workspaces require login and accounts start with zero workspaces', async ({ page }) => {
   await page.goto('/workspaces');
@@ -214,7 +237,8 @@ test('imports BPMN and rejects invalid files without changing the current model'
 
 test('version releases, assigned work and model deletion are persisted', async ({ page }) => {
   const project = await setupProject(page);
-  await newModel(page, 'Versioned model');
+  const modelUrl = await newModel(page, 'Versioned model');
+  await editDiagramLabel(page, 'StartEvent_1', 'Versioned start');
   await page.getByRole('button', { name: 'History & work' }).click();
   const panel = page.locator('.collaboration-drawer');
   await panel.getByLabel('Version label').fill('Review 1.0');
@@ -234,6 +258,11 @@ test('version releases, assigned work and model deletion are persisted', async (
   await page.getByRole('button', { name: 'History & work' }).click();
   await expect(page.locator('.task-row')).toContainText('Validate resources');
   await page.getByRole('button', { name: 'Close collaboration' }).click();
+  await projectBreadcrumb(page);
+  await page.getByRole('button', { name: /^Work packages/ }).click();
+  await page.locator('.task-row').filter({ hasText: 'Validate resources' }).getByRole('link', { name: 'Open model', exact: true }).click();
+  await expect(page).toHaveURL(modelUrl);
+  await expectDiagram(page, 'StartEvent_1', 'Versioned start');
   await more(page);
   await page.getByRole('button', { name: 'Delete model…', exact: true }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Delete model', exact: true }).click();
@@ -276,4 +305,206 @@ test('legacy help sample links create a model inside the organization hierarchy'
   await editorReady(page);
   await expect(modelName(page)).toHaveValue('Paper sample - Coffee break');
   await expect(page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'My workspace' })).toBeVisible();
+});
+
+test('Imported models opens the selected diagram after repeated hub navigation, keyboard opening and reload', async ({ page }) => {
+  await register(page);
+  await create(page, 'workspace', 'Migrated workspace');
+  await create(page, 'project', 'Imported models');
+  const firstXml = await fs.readFile(path.resolve('tests/browser/fixtures/imported-model.bpmn'), 'utf8');
+  await page.locator('#hub-import-file').setInputFiles({ name: 'first-model.bpmn', mimeType: 'text/xml', buffer: Buffer.from(firstXml) });
+  await expectDiagram(page, 'Imported_Start', 'Imported start');
+  const firstUrl = page.url();
+  await projectBreadcrumb(page, 'Imported models');
+  await page.locator('#hub-import-file').setInputFiles({
+    name: 'second-model.bpmn', mimeType: 'text/xml',
+    buffer: Buffer.from(firstXml.replaceAll('Imported_', 'Second_').replace('Imported start', 'Second start'))
+  });
+  await expectDiagram(page, 'Second_Start', 'Second start');
+  const secondUrl = page.url();
+  await projectBreadcrumb(page, 'Imported models');
+
+  // A real row activation exercises client navigation; page.goto alone misses stale editor DOM.
+  const firstRow = page.getByRole('row').filter({ hasText: 'first-model' });
+  await firstRow.focus();
+  await firstRow.press('Enter');
+  await expect(page).toHaveURL(firstUrl);
+  await expect(modelName(page)).toHaveValue('first-model');
+  await expectDiagram(page, 'Imported_Start', 'Imported start');
+  await expect(page.locator('#js-canvas [data-element-id="Second_Start"]')).toHaveCount(0);
+  await projectBreadcrumb(page, 'Imported models');
+  await page.getByRole('row').filter({ hasText: 'second-model' }).click();
+  await expect(page).toHaveURL(secondUrl);
+  await expectDiagram(page, 'Second_Start', 'Second start');
+  await expect(page.locator('#js-canvas [data-element-id="Imported_Start"]')).toHaveCount(0);
+  await page.reload();
+  await expectDiagram(page, 'Second_Start', 'Second start');
+  await page.getByRole('button', { name: 'Toggle model list' }).click();
+  await page.getByRole('navigation', { name: 'simpleXflow models' }).getByRole('button').filter({ hasText: 'first-model' }).click();
+  await expect(page).toHaveURL(firstUrl);
+  await expectDiagram(page, 'Imported_Start', 'Imported start');
+});
+
+test('switching models flushes pending diagram edits to the correct model', async ({ page }) => {
+  await setupProject(page);
+  const firstUrl = await newModel(page, 'First document');
+  await projectBreadcrumb(page);
+  const secondUrl = await newModel(page, 'Second document');
+  await page.getByRole('button', { name: 'Toggle model list' }).click();
+  const modelList = page.getByRole('navigation', { name: 'simpleXflow models' });
+  await modelList.getByRole('button').filter({ hasText: 'First document' }).click();
+  await expect(page).toHaveURL(firstUrl);
+  await editorReady(page);
+  await page.getByRole('button', { name: 'Toggle model list' }).click();
+  await editDiagramLabel(page, 'StartEvent_1', 'Only in the first document');
+  // Deliberately navigate before waiting for the debounced autosave indicator.
+  await modelList.getByRole('button').filter({ hasText: 'Second document' }).click();
+  await expect(page).toHaveURL(secondUrl);
+  await editorReady(page);
+  await expect(page.locator('#js-canvas .djs-label').filter({ hasText: 'Only in the first document' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Toggle model list' }).click();
+  await modelList.getByRole('button').filter({ hasText: 'First document' }).click();
+  await expectDiagram(page, 'StartEvent_1', 'Only in the first document');
+  await page.reload();
+  await expectDiagram(page, 'StartEvent_1', 'Only in the first document');
+});
+
+test('delayed editor startup loads the selected saved XML instead of a blank default', async ({ page }) => {
+  await setupProject(page);
+  await page.locator('#hub-import-file').setInputFiles(path.resolve('tests/browser/fixtures/imported-model.bpmn'));
+  await expectDiagram(page, 'Imported_Start', 'Imported start');
+  let releaseBundle;
+  let requested = false;
+  const bundleGate = new Promise(resolve => { releaseBundle = resolve; });
+  await page.route('**/vendor/simbpmn/main_window/index.js', async route => {
+    requested = true;
+    await bundleGate;
+    await route.continue();
+  });
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(modelName(page)).toHaveValue('imported-model');
+    await expect.poll(() => requested).toBeTruthy();
+    await expect(page.locator('#js-canvas .djs-shape')).toHaveCount(0);
+  } finally { releaseBundle(); }
+  await expectDiagram(page, 'Imported_Start', 'Imported start');
+  await expect(page.locator('#js-canvas [data-element-id="StartEvent_1"]')).toHaveCount(0);
+});
+
+test('failed editor bundle reports an error and Retry restores the saved model', async ({ page }) => {
+  await setupProject(page);
+  await page.locator('#hub-import-file').setInputFiles(path.resolve('tests/browser/fixtures/imported-model.bpmn'));
+  await expectDiagram(page, 'Imported_Start', 'Imported start');
+  let requests = 0;
+  await page.route('**/vendor/simbpmn/main_window/index.js', route => {
+    requests += 1;
+    return requests === 1 ? route.abort('failed') : route.continue();
+  });
+  await page.reload();
+  const warning = page.locator('.modeler-warning');
+  await expect(warning).toContainText('Could not load the simpleXflow editor bundle');
+  await expect(modelName(page)).toHaveValue('imported-model');
+  await warning.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expectDiagram(page, 'Imported_Start', 'Imported start');
+  expect(requests).toBe(2);
+  await page.reload();
+  await expectDiagram(page, 'Imported_Start', 'Imported start');
+});
+
+test('restoring a version restores its diagram and keeps later edits in history', async ({ page }) => {
+  await setupProject(page);
+  await newModel(page, 'Restorable model');
+  await editDiagramLabel(page, 'StartEvent_1', 'Approved start');
+  await page.getByRole('button', { name: 'History & work' }).click();
+  const panel = page.locator('.collaboration-drawer');
+  await panel.getByLabel('Version label').fill('Approved baseline');
+  await panel.getByRole('button', { name: 'Save version', exact: true }).click();
+  await expect(panel.locator('.version-row').filter({ hasText: 'Approved baseline' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close collaboration' }).click();
+  await expect(panel).toBeHidden();
+  await expectDiagram(page, 'StartEvent_1', 'Approved start');
+  await editDiagramLabel(page, 'StartEvent_1', 'Unapproved change');
+  await page.getByRole('button', { name: 'History & work' }).click();
+  await panel.getByLabel('Version label').fill('Later draft');
+  await panel.getByRole('button', { name: 'Save version', exact: true }).click();
+  const baseline = panel.locator('.version-row').filter({ hasText: 'Approved baseline' });
+  await baseline.getByRole('button', { name: 'Restore', exact: true }).click();
+  await baseline.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expectDiagram(page, 'StartEvent_1', 'Unapproved change');
+  await baseline.getByRole('button', { name: 'Restore', exact: true }).click();
+  await baseline.getByRole('button', { name: 'Confirm restore', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('Version restored');
+  await expectDiagram(page, 'StartEvent_1', 'Approved start');
+  await expect(panel.locator('.version-row').filter({ hasText: 'Later draft' })).toBeVisible();
+  await page.reload();
+  await expectDiagram(page, 'StartEvent_1', 'Approved start');
+});
+
+test('moving models into nested folders and cancelling deletion preserve saved content', async ({ page }) => {
+  const project = await setupProject(page);
+  const url = await newModel(page, 'Moved model');
+  await editDiagramLabel(page, 'StartEvent_1', 'Keep this model');
+  await more(page);
+  await page.getByRole('button', { name: 'Move to folder…', exact: true }).click();
+  const move = page.getByRole('dialog', { name: 'Move model' });
+  await move.getByLabel('Folder path').fill('Processes/Sales');
+  await move.getByRole('button', { name: 'Move', exact: true }).click();
+  await expect(move).toBeHidden();
+  await expect(page.locator('.app-header').getByRole('navigation', { name: 'Breadcrumb' })).toContainText('Processes/Sales');
+  await more(page);
+  await page.getByRole('button', { name: 'Delete model…', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await projectBreadcrumb(page);
+  await expect(page).toHaveURL(project);
+  await expect(page.getByRole('row').filter({ hasText: 'Moved model' })).toHaveCount(0);
+  await page.getByRole('row').filter({ hasText: 'Processes' }).click();
+  await page.getByRole('row').filter({ hasText: 'Sales' }).click();
+  await page.getByRole('row').filter({ hasText: 'Moved model' }).click();
+  await expect(page).toHaveURL(url);
+  await expectDiagram(page, 'StartEvent_1', 'Keep this model');
+  await page.reload();
+  await expectDiagram(page, 'StartEvent_1', 'Keep this model');
+});
+
+test('invalid hub imports keep the folder unchanged and model names remain literal text', async ({ page }) => {
+  await setupProject(page);
+  const name = '<img src=x onerror=alert(1)> & important model';
+  await newModel(page, name);
+  await projectBreadcrumb(page);
+  const rows = page.getByRole('table', { name: 'Models and folders' }).getByRole('row');
+  await expect(rows).toHaveCount(2);
+  await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible();
+  await expect(page.locator('.file-table-row img')).toHaveCount(0);
+  const url = page.url();
+  await page.locator('#hub-import-file').setInputFiles({ name: 'broken.sxf', mimeType: 'application/json', buffer: Buffer.from('{broken') });
+  await expect(page.getByRole('status')).toContainText('Import failed:');
+  await expect(page).toHaveURL(url);
+  await expect(rows).toHaveCount(2);
+  await page.getByRole('row').filter({ hasText: name }).click();
+  await editorReady(page);
+  await expect(modelName(page)).toHaveValue(name);
+  await page.reload();
+  await expect(modelName(page)).toHaveValue(name);
+  await editorReady(page);
+});
+
+test('workspace and file navigation remains keyboard operable on a narrow screen', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setupProject(page);
+  await newModel(page, 'Mobile model');
+  await projectBreadcrumb(page);
+  await expect(page.getByRole('heading', { name: 'Simulation project', exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBeTruthy();
+  const row = page.getByRole('row').filter({ hasText: 'Mobile model' });
+  await row.focus();
+  await expect(row).toBeFocused();
+  await row.press('Enter');
+  await editorReady(page);
+  await expect(modelName(page)).toHaveValue('Mobile model');
+  await projectBreadcrumb(page);
+  const search = page.getByRole('searchbox', { name: 'Search files' });
+  await search.fill('absent');
+  await expect(page.getByRole('heading', { name: 'No matching models or folders' })).toBeVisible();
+  await search.fill('Mobile');
+  await expect(row).toBeVisible();
 });

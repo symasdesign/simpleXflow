@@ -119,7 +119,8 @@
                         }
                         @foreach (var model in visibleModels)
                         {
-                            <a class="file-table-row" role="row" href="@($"projects/{model.Id}")" data-enhance-nav="false"><span role="cell"><span class="file-icon" aria-hidden="true">◇</span>@model.Name</span><span role="cell">@model.UpdatedUtc.ToLocalTime().ToString("g")</span><span role="cell">simpleXflow</span></a>
+                            @* The legacy editor binds to the document once. A native navigation gives each model a fresh editor, including after returning to this list. *@
+                            <a class="file-table-row" role="row" href="@($"projects/{model.Id}")" target="_top" data-enhance-nav="false"><span role="cell"><span class="file-icon" aria-hidden="true">◇</span>@model.Name</span><span role="cell">@model.UpdatedUtc.ToLocalTime().ToString("g")</span><span role="cell">simpleXflow</span></a>
                         }
                     }
                 </div>
