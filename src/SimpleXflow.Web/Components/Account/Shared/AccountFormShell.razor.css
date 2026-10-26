@@ -1,0 +1,14 @@
+.account-shell { display: flex; justify-content: center; padding: 3rem 1rem; }
+.account-card { width: 100%; max-width: 460px; padding: 2rem; background: white; border: 1px solid #e2e6ed; border-radius: 12px; box-shadow: 0 8px 32px #1e293b08; }
+.account-brand { display: inline-block; margin-bottom: 2rem; }
+.account-brand img { width: 170px; max-height: 48px; }
+.account-card ::deep h1 { font-size: 1.7rem; letter-spacing: -.04em; margin-bottom: .5rem; }
+.account-card ::deep .account-intro { color: #64748b; font-size: .9rem; margin-bottom: 1.5rem; line-height: 1.5; }
+.account-card ::deep .form-floating { margin-bottom: 1rem; }
+.account-card ::deep .account-links { display: grid; gap: .6rem; margin-top: 1.2rem; font-size: .85rem; }
+.account-card ::deep .form-text { font-size: .78rem; margin-bottom: 1rem; color: #64748b; }
+.account-card ::deep .account-notice { padding: .8rem; font-size: .85rem; background: #f1f5f9; border-radius: 6px; }
+.account-card ::deep button[type=submit] { width: 100%; }
+.account-card ::deep .account-actions { display: grid; gap: .7rem; margin-top: 1rem; }
+.account-card ::deep .account-actions a { text-align: center; text-decoration: none; }
+@media(max-width: 600px) { .account-shell { padding: 1rem 0; } .account-card { padding: 1.25rem; } }

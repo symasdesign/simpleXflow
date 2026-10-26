@@ -39,6 +39,9 @@
     [SupplyParameterFromForm]
     private InputModel Input { get; set; } = default!;
 
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
     protected override void OnInitialized()
     {
         Input ??= new();
@@ -46,6 +49,12 @@
 
     private async Task OnValidSubmitAsync()
     {
+        if (EmailSender is IdentityEmailSender { IsConfigured: false })
+        {
+            message = "Error: Email delivery is not configured. Contact the installation administrator to enable confirmation emails.";
+            return;
+        }
+
         var user = await UserManager.FindByEmailAsync(Input.Email!);
         if (user is null)
         {
@@ -58,8 +67,16 @@
         code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
         var callbackUrl = NavigationManager.GetUriWithQueryParameters(
             NavigationManager.ToAbsoluteUri("Account/ConfirmEmail").AbsoluteUri,
-            new Dictionary<string, object?> { ["userId"] = userId, ["code"] = code });
-        await EmailSender.SendConfirmationLinkAsync(user, Input.Email, HtmlEncoder.Default.Encode(callbackUrl));
+            new Dictionary<string, object?> { ["userId"] = userId, ["code"] = code, ["returnUrl"] = ReturnUrl });
+        try
+        {
+            await EmailSender.SendConfirmationLinkAsync(user, Input.Email, HtmlEncoder.Default.Encode(callbackUrl));
+        }
+        catch
+        {
+            message = "Error: Email delivery is temporarily unavailable. Please try again later.";
+            return;
+        }
 
         message = "Verification email sent. Please check your email.";
     }

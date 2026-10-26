@@ -21,24 +21,19 @@
 
 <PageTitle>Register</PageTitle>
 
-<h1>Register</h1>
-
-<div class="row">
-    <div class="col-lg-6">
+<AccountFormShell>
+        <h1>Create your account</h1>
+        <p class="account-intro">Start with your own organization. Create workspaces for your team or accept invitations from other organizations.</p>
         <StatusMessage Message="@Message" />
         <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
             <DataAnnotationsValidator />
-            <h2>Create a new account.</h2>
-            <hr />
             <ValidationSummary class="text-danger" role="alert" />
             <div class="form-floating mb-3">
                 <InputText @bind-Value="Input.TenantName" id="Input.TenantName" class="form-control" autocomplete="organization" aria-required="true" placeholder="Company or team" />
-                <label for="Input.TenantName">Tenant workspace</label>
+                <label for="Input.TenantName">Organization name</label>
                 <ValidationMessage For="() => Input.TenantName" class="text-danger" />
-                <div class="form-text">
-                    Use your company or team workspace name. Existing tenant access should later be handled by invitation so tenant names are not exposed publicly.
-                </div>
             </div>
+            <p class="form-text">Your company, team or personal organization. A workspace invitation never changes your organization.</p>
             <div class="form-floating mb-3">
                 <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" />
                 <label for="Input.Email">Email</label>
@@ -54,17 +49,11 @@
                 <label for="Input.ConfirmPassword">Confirm Password</label>
                 <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
             </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Register</button>
+            <button type="submit" class="w-100 btn btn-lg btn-primary">Create account</button>
         </EditForm>
-    </div>
-    <div class="col-lg-4 col-lg-offset-2">
-        <section>
-            <h3>Use another service to register.</h3>
-            <hr />
+        <div class="account-links"><a href="@(NavigationManager.GetUriWithQueryParameters("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))">Already have an account? Log in</a></div>
             <ExternalLoginPicker />
-        </section>
-    </div>
-</div>
+</AccountFormShell>
 
 @code {
     private IEnumerable<IdentityError>? identityErrors;
@@ -88,14 +77,23 @@
         {
             var user = CreateUser();
             var tenantSlug = Tenant.CreateSlug(Input.TenantName);
-            var tenant = await DbContext.Tenants
-                .SingleOrDefaultAsync(candidate => candidate.Slug == tenantSlug);
-
-            if (tenant is null)
+            if (await DbContext.Tenants.AnyAsync(candidate => candidate.Slug == tenantSlug))
             {
-                tenant = Tenant.Create(Input.TenantName);
-                DbContext.Tenants.Add(tenant);
+                // Knowing a workspace name does not authorize access to its projects.
+                // Joining an existing tenant must use a separate invitation flow.
+                identityErrors =
+                [
+                    new IdentityError
+                    {
+                        Code = "WorkspaceUnavailable",
+                        Description = "Unable to create this organization. Please choose a different organization name."
+                    }
+                ];
+                return;
             }
+
+            var tenant = Tenant.Create(Input.TenantName);
+            DbContext.Tenants.Add(tenant);
 
             await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
             var emailStore = GetEmailStore();
@@ -120,7 +118,15 @@
                 NavigationManager.ToAbsoluteUri("Account/ConfirmEmail").AbsoluteUri,
                 new Dictionary<string, object?> { ["userId"] = userId, ["code"] = code, ["returnUrl"] = ReturnUrl });
 
-            await EmailSender.SendConfirmationLinkAsync(user, Input.Email, HtmlEncoder.Default.Encode(callbackUrl));
+            try
+            {
+                await EmailSender.SendConfirmationLinkAsync(user, Input.Email, HtmlEncoder.Default.Encode(callbackUrl));
+            }
+            catch (Exception exception)
+            {
+                // Account creation already succeeded. Let the user sign in and retry confirmation.
+                Logger.LogWarning(exception, "The account was created, but the confirmation email could not be delivered.");
+            }
 
             if (UserManager.Options.SignIn.RequireConfirmedAccount)
             {
@@ -131,7 +137,7 @@
             else
             {
                 await SignInManager.SignInAsync(user, isPersistent: false);
-                RedirectManager.RedirectTo(ReturnUrl);
+                RedirectManager.RedirectTo(ReturnUrl ?? "/workspaces");
             }
         }
         catch (Exception exception)
@@ -174,7 +180,7 @@
     {
         [Required]
         [StringLength(200, MinimumLength = 2)]
-        [Display(Name = "Tenant")]
+        [Display(Name = "Organization")]
         public string TenantName { get; set; } = "";
 
         [Required]

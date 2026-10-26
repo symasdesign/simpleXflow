@@ -158,6 +158,16 @@ public static class ProjectSamples
                 <di:waypoint x="955" y="265" />
                 <di:waypoint x="1010" y="266" />
               </bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Association_CoffeeBreak_Context_di" bpmnElement="Association_CoffeeBreak_Context">
+                <di:waypoint x="270" y="405" />
+                <di:waypoint x="230" y="385" />
+                <di:waypoint x="230" y="310" />
+                <di:waypoint x="283" y="281" />
+              </bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Association_CoffeeBreak_Resources_di" bpmnElement="Association_CoffeeBreak_Resources">
+                <di:waypoint x="650" y="430" />
+                <di:waypoint x="580" y="370" />
+              </bpmndi:BPMNEdge>
             </bpmndi:BPMNPlane>
           </bpmndi:BPMNDiagram>
         </bpmn2:definitions>
@@ -241,6 +251,10 @@ public static class ProjectSamples
               <bpmndi:BPMNEdge id="Flow_Release_End_di" bpmnElement="Flow_Release_End">
                 <di:waypoint x="955" y="228" />
                 <di:waypoint x="1015" y="228" />
+              </bpmndi:BPMNEdge>
+              <bpmndi:BPMNEdge id="Association_MM1_Assumptions_di" bpmnElement="Association_MM1_Assumptions">
+                <di:waypoint x="330" y="320" />
+                <di:waypoint x="290" y="266" />
               </bpmndi:BPMNEdge>
             </bpmndi:BPMNPlane>
           </bpmndi:BPMNDiagram>

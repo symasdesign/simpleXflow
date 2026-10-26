@@ -13,16 +13,18 @@ simpleXflow is the Blazor WebApp successor for the former Electron-based modelin
 
 - Blazor Server interactivity
 - ASP.NET Core Identity registration and login
-- One tenant per registered user at account creation
+- One organization per registered user at account creation, with shared workspaces, projects and model folders
 - Tenant ID is emitted as an auth claim
-- EF Core global query filters isolate tenant-owned project data
+- EF Core query filters and service permissions enforce explicit workspace membership, including invited members from other organizations
+- Workspace Owner/Admin/Editor/Viewer roles, expiring invitations and verified-email acceptance
+- Model history, planned/manual releases, optimistic save conflicts, editor presence and delegated work packages
 - SQLite locally, PostgreSQL/Neon for low-cost shared deployments via configuration
 - Azure SQL remains available as a fallback provider
-- Visual simpleXflow workspace using the migrated modeler bundle
+- Compact workspace hub and visual simpleXflow editor using the migrated modeler bundle
 - Architecture, split, and logic views backed by the previous Electron visualizer behavior
 - Built-in paper and poster samples for presentation demos
 - In-app Help/Get Started page
-- Domain and infrastructure unit tests
+- Domain, application, persistence, HTTP, import, editor bridge and browser regression tests
 - GitHub Actions pipeline for build, test, and container image publishing
 - Manual Azure Container Apps deployment workflow
 
@@ -53,7 +55,15 @@ See `docs/paper-demo.md` for the EUROSIM 2026 presentation setup and built-in pa
 
 ## Tests
 
+Run the complete suite from the repository root with PowerShell 7, .NET 10 and Node.js 22:
+
 ```powershell
-dotnet test tests/SimpleXflow.Domain.Tests/SimpleXflow.Domain.Tests.csproj
-dotnet test tests/SimpleXflow.Infrastructure.Tests/SimpleXflow.Infrastructure.Tests.csproj
+./scripts/test.ps1 -InstallBrowsers  # First run: restore dependencies and install Chromium
+./scripts/test.ps1                  # Subsequent complete runs
+./scripts/test.ps1 -SkipBrowser     # .NET unit and integration tests with coverage
 ```
+
+The tests use isolated SQLite databases and local browser sessions. No cloud credentials are needed.
+See [Testing](docs/testing.md) for individual suites, reports, test design and coverage boundaries.
+
+See [Workspaces and collaboration](docs/workspaces.md) for hierarchy, permissions, invitations, local files and migration behavior.

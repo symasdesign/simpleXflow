@@ -1,5 +1,6 @@
 using System.Data.Common;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -55,7 +56,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
-builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityEmailSender>();
 
 var app = builder.Build();
 
@@ -86,6 +87,17 @@ else
     app.UseHsts();
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+app.Use(async (context, next) =>
+{
+    // Error-page rendering must not replay form submissions (including failed antiforgery checks).
+    if (!HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method)
+        && context.Features.Get<IStatusCodePagesFeature>() is { } statusCodePages)
+    {
+        statusCodePages.Enabled = false;
+    }
+
+    await next();
+});
 app.UseHttpsRedirection();
 
 app.UseStaticFiles();
@@ -187,3 +199,6 @@ static int? GetIntProperty(object instance, string propertyName)
 }
 
 internal sealed record DatabaseErrorDescriptor(int? Number, int? State, int? Class);
+
+// Expose the application entry point for HTTP integration tests.
+public partial class Program { }

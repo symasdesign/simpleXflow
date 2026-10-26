@@ -1,30 +1,10 @@
 @inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
-
-    <main>
-        <div class="top-row px-4">
-            <AuthorizeView>
-                <Authorized>
-                    <span>@context.User.Identity?.Name</span>
-                </Authorized>
-                <NotAuthorized>
-                    <a href="Account/Login">Login</a>
-                </NotAuthorized>
-            </AuthorizeView>
-        </div>
-
-        <article class="app-content px-4">
-            @Body
-        </article>
-    </main>
+<div class="app-shell">
+    <header class="app-header" onclick="if(event.target.closest('a')) this.querySelectorAll('details[open]').forEach(menu => menu.open = false)"><NavMenu /></header>
+    <main id="main-content"><article class="app-content">@Body</article></main>
 </div>
-
-<div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">??</span>
+<div id="blazor-error-ui" data-nosnippet role="alert">
+    The connection was interrupted. <a href="." class="reload">Reload</a>
+    <button type="button" class="dismiss" aria-label="Dismiss">×</button>
 </div>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" id="Imported_Definitions" targetNamespace="https://example.test/simplexflow">
+  <bpmn2:process id="Imported_Process" isExecutable="false">
+    <bpmn2:startEvent id="Imported_Start" name="Imported start" />
+  </bpmn2:process>
+  <bpmndi:BPMNDiagram id="Imported_Diagram">
+    <bpmndi:BPMNPlane id="Imported_Plane" bpmnElement="Imported_Process">
+      <bpmndi:BPMNShape id="Imported_Start_di" bpmnElement="Imported_Start">
+        <dc:Bounds x="200" y="160" width="36" height="36" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn2:definitions>

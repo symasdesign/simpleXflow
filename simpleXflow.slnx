@@ -6,7 +6,9 @@
     <Project Path="src/SimpleXflow.Web/SimpleXflow.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/SimpleXflow.Application.Tests/SimpleXflow.Application.Tests.csproj" />
     <Project Path="tests/SimpleXflow.Domain.Tests/SimpleXflow.Domain.Tests.csproj" />
     <Project Path="tests/SimpleXflow.Infrastructure.Tests/SimpleXflow.Infrastructure.Tests.csproj" />
+    <Project Path="tests/SimpleXflow.Web.Tests/SimpleXflow.Web.Tests.csproj" />
   </Folder>
 </Solution>

@@ -12,9 +12,20 @@
 
 <h1>Confirm email</h1>
 <StatusMessage Message="@statusMessage" />
+@if (confirmed)
+{
+    <a class="primary-action" href="@ContinueUrl">Continue</a>
+}
 
 @code {
     private string? statusMessage;
+    private bool confirmed;
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    private string ContinueUrl => !string.IsNullOrEmpty(ReturnUrl) && ReturnUrl.StartsWith('/')
+        && !ReturnUrl.StartsWith("//") && !ReturnUrl.Contains('\\') ? ReturnUrl : "/workspaces";
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
@@ -37,13 +48,21 @@
         if (user is null)
         {
             HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
-            statusMessage = $"Error loading user with ID {UserId}";
+            statusMessage = "Error: This confirmation link is invalid.";
         }
         else
         {
-            var code = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(Code));
-            var result = await UserManager.ConfirmEmailAsync(user, code);
-            statusMessage = result.Succeeded ? "Thank you for confirming your email." : "Error confirming your email.";
+            try
+            {
+                var code = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(Code));
+                var result = await UserManager.ConfirmEmailAsync(user, code);
+                confirmed = result.Succeeded;
+                statusMessage = result.Succeeded ? "Thank you for confirming your email." : "Error confirming your email.";
+            }
+            catch (FormatException)
+            {
+                statusMessage = "Error: This confirmation link is invalid.";
+            }
         }
     }
 }

@@ -7,7 +7,9 @@ COPY src/SimpleXflow.Application/SimpleXflow.Application.csproj src/SimpleXflow.
 COPY src/SimpleXflow.Infrastructure/SimpleXflow.Infrastructure.csproj src/SimpleXflow.Infrastructure/
 COPY src/SimpleXflow.Web/SimpleXflow.Web.csproj src/SimpleXflow.Web/
 COPY tests/SimpleXflow.Domain.Tests/SimpleXflow.Domain.Tests.csproj tests/SimpleXflow.Domain.Tests/
+COPY tests/SimpleXflow.Application.Tests/SimpleXflow.Application.Tests.csproj tests/SimpleXflow.Application.Tests/
 COPY tests/SimpleXflow.Infrastructure.Tests/SimpleXflow.Infrastructure.Tests.csproj tests/SimpleXflow.Infrastructure.Tests/
+COPY tests/SimpleXflow.Web.Tests/SimpleXflow.Web.Tests.csproj tests/SimpleXflow.Web.Tests/
 
 RUN dotnet restore simpleXflow.slnx
 

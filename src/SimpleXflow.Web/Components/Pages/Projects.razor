@@ -2,157 +2,116 @@
 @page "/projects/{ProjectId:guid}"
 @rendermode InteractiveServer
 @attribute [Authorize]
-
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components
-@using System.IO.Compression
+@using Microsoft.AspNetCore.Components.Sections
+@using SimpleXflow.Web.Infrastructure
 @using SimpleXflow.Application.Projects
-
-@implements IDisposable
-
+@using SimpleXflow.Application.Workspaces
+@using SimpleXflow.Web.Components.Collaboration
+@implements IAsyncDisposable
 @inject IFlowProjectService ProjectService
+@inject IWorkspaceService WorkspaceService
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 
-<PageTitle>Projects</PageTitle>
-
-<section class="workspace-shell">
-    <aside class="project-list">
-        <div class="panel-heading">
-            <div>
-                <span class="eyebrow">Tenant workspace</span>
-                <h1>Projects</h1>
-            </div>
-            <button type="button" class="icon-button" title="New simpleXflow project" @onclick="StartNewProjectAsync">+</button>
-        </div>
-
-        @if (projects.Count == 0 && ProjectId.HasValue)
+<PageTitle>@form.Name · simpleXflow</PageTitle>
+<NavigationLock ConfirmExternalNavigation="@hasUnsavedChanges" OnBeforeInternalNavigation="BeforeNavigationAsync" />
+<SectionContent SectionName="context-navigation">
+    <nav class="breadcrumbs" aria-label="Breadcrumb">
+        <a href="workspaces" title="Workspaces">@(organization?.Name ?? "Workspaces")</a>
+        @if (workspace is not null) { <span>/</span><a href="@($"workspaces/{workspace.Id}")">@workspace.Name</a> }
+        @if (container is not null) { <span>/</span><a href="@ContainerHref">@container.Name</a> }
+        @if (!string.IsNullOrEmpty(form.FolderPath)) { <span>/</span><a href="@($"{ContainerHref}?folder={Uri.EscapeDataString(form.FolderPath)}")">@form.FolderPath</a> }
+        <span>/</span><span aria-current="page" title="@form.Name">@form.Name</span>
+    </nav>
+</SectionContent>
+<div class="model-page">
+    <section class="@(showFiles ? "workspace-shell model-workspace with-files" : "workspace-shell model-workspace")">
+        @if (showFiles)
         {
-            <div class="empty-state project-empty-state">
-                <strong>No simpleXflow projects yet</strong>
-                <span>Create your first simpleXflow project or import an existing project.</span>
-                <button type="button" class="secondary-action" @onclick="StartNewProjectAsync">Create first project</button>
-            </div>
-        }
-        else
-        {
-            <nav class="project-nav" aria-label="simpleXflow projects">
-                @if (!ProjectId.HasValue)
-                {
-                    <button type="button" class="project-row active draft" @onclick="StartNewProjectAsync">
-                        <span>@DraftName</span>
-                        <small>Click to create</small>
-                    </button>
-                }
-
-                @foreach (var project in projects)
-                {
-                    <a class="@GetProjectRowClass(project.Id)" href="@GetProjectHref(project.Id)" data-enhance-nav="false">
-                        <span>@project.Name</span>
-                        <small>@project.UpdatedUtc.ToLocalTime().ToString("g")</small>
-                    </a>
-                }
-            </nav>
-
-            @if (projects.Count == 0)
-            {
-                <div class="empty-state project-empty-state">
-                    <strong>No saved projects yet</strong>
-                    <span>Create the first project. It is saved immediately and can be edited afterwards.</span>
+            <aside class="project-list">
+                <div class="panel-heading"><div><span class="eyebrow">@container?.Name</span><h1>Models</h1></div>
+                    <button type="button" class="icon-button" title="New model" disabled="@(!CanEdit)" @onclick="StartNewProjectAsync">+</button>
                 </div>
-            }
+                <nav class="project-nav" aria-label="simpleXflow models">
+                    @foreach (var project in projects.Where(p => p.WorkspaceProjectId == model?.WorkspaceProjectId))
+                    {
+                        <button type="button" class="@GetProjectRowClass(project.Id)" @onclick="() => SelectModelAsync(project.Id)"><span>@project.Name</span><small>@(string.IsNullOrEmpty(project.FolderPath) ? "/" : project.FolderPath)</small></button>
+                    }
+                </nav>
+                <a class="sidebar-note" href="@ContainerHref">Manage models and folders ↗</a>
+            </aside>
         }
-    </aside>
-
-    <section class="@EditorPanelClass">
-        @if (isFullScreen)
-        {
-            <div class="fullscreen-action-bar">
-                <span>@form.Name</span>
-                <span class="@AutoSaveIndicatorClass">@AutoSaveText</span>
-                <button type="button" class="secondary-action" @onclick="ToggleFullScreen">Exit full screen</button>
-            </div>
-        }
-        else
-        {
-            <div class="editor-toolbar">
-                <div>
-                    <span class="eyebrow">@ModeLabel</span>
-                    <h2>@Title</h2>
-                    <p class="toolbar-help">@HelpText</p>
-                </div>
+        <section class="@EditorPanelClass">
+            <div class="editor-toolbar compact-toolbar">
+                <button type="button" class="icon-button" title="Toggle model list" aria-label="Toggle model list" @onclick="() => showFiles = !showFiles">☰</button>
+                <div class="project-meta-form model-name"><label class="visually-hidden" for="model-name">Model name</label><input id="model-name" type="text" value="@form.Name" @oninput="OnNameChangedAsync" disabled="@(!CanEdit || isImporting || isSwitchingModel)" maxlength="240" /></div>
                 <div class="toolbar-actions">
-                    <div class="sample-action">
-                        <select class="sample-select" @bind="selectedSampleId" aria-label="Demo sample">
-                            <option value="">Demo sample</option>
-                            @foreach (var sample in ProjectSamples.All)
+                    <span class="@AutoSaveIndicatorClass" aria-live="polite">@AutoSaveText</span>
+                    @if (presence.Count > 0) { <span class="presence-badge" title="@string.Join(", ", presence.Select(p => p.Email))">@presence.Count viewing</span> }
+                    <button type="button" class="secondary-action" data-model-name="@form.Name" onclick="simpleXflowFiles.saveModel(this)">Save locally…</button>
+                    <button type="button" class="secondary-action" @onclick="ToggleCollaborationAsync" aria-expanded="@showCollaboration">History &amp; work</button>
+                    <details class="model-actions">
+                        <summary class="secondary-action">More</summary>
+                        <div class="model-menu">
+                            <button type="button" @onclick="ToggleFullScreen">@(isFullScreen ? "Exit full screen" : "Full screen")</button>
+                            @if (CanEdit)
                             {
-                                <option value="@sample.Id">@sample.Name</option>
+                                <label class="import-action">Import as new model<InputFile id="project-import-file" OnChange="ImportProjectAsync" accept=".bpmn,.xml,.zip,.sxf" class="import-file-input" /></label>
+                                <button type="button" @onclick="OpenMove">Move to folder…</button>
+                                <div class="sample-action">
+                                    <label for="sample-select">Model template</label>
+                                    <select id="sample-select" class="sample-select" @bind="selectedSampleId" aria-label="Model template">
+                                        <option value="">Choose template…</option>
+                                        @foreach (var sample in ProjectSamples.All) { <option value="@sample.Id">@sample.Name</option> }
+                                    </select>
+                                    <small>Examples for replacing this model. Your saved models are in the model list.</small>
+                                    <button type="button" class="secondary-action" @onclick="RequestSampleLoadAsync" disabled="@string.IsNullOrWhiteSpace(selectedSampleId)">Load template</button>
+                                </div>
                             }
-                        </select>
-                        <button type="button" class="secondary-action" @onclick="RequestSampleLoadAsync" disabled="@string.IsNullOrWhiteSpace(selectedSampleId)">Load</button>
-                    </div>
-                    <div class="@AutoSaveIndicatorClass" aria-live="polite">@AutoSaveText</div>
-                    <button type="button" class="secondary-action" @onclick="ToggleFullScreen">Full screen</button>
-                    <label class="secondary-action import-action" title="Import simpleXflow project">
-                        @ImportLabel
-                        <InputFile id="project-import-file" OnChange="ImportProjectAsync" accept=".bpmn,.xml,.zip" class="import-file-input" />
-                    </label>
+                            @if (model?.CanManage == true) { <button type="button" class="danger-text" @onclick="() => confirmDelete = true">Delete model…</button> }
+                        </div>
+                    </details>
                 </div>
             </div>
-
-            @if (!string.IsNullOrWhiteSpace(statusMessage))
-            {
-                <div class="status-line">@statusMessage</div>
-            }
-
-            <EditForm Model="form" class="editor-form project-meta-form">
-                <DataAnnotationsValidator />
-                <ValidationSummary class="text-danger" />
-
-                <label>
-                    Name
-                    <input type="text" value="@form.Name" @oninput="OnNameChangedAsync" class="form-control" />
-                </label>
-
-            </EditForm>
-
-            <div class="workflow-hint" role="status">
-                <div>
-                    <strong>1. Model</strong>
-                    <span>Use the palette to model the architecture of the simpleXflow project.</span>
+            @if (!string.IsNullOrWhiteSpace(statusMessage)) { <div class="status-line" role="status">@statusMessage</div> }
+            @if (!CanEdit) { <div class="status-line">View only · Ask a workspace administrator for editing access.</div> }
+            @if (!string.IsNullOrWhiteSpace(autosaveError)) { <div class="conflict-banner" role="alert">@autosaveError <button class="secondary-action" @onclick="() => AutosaveNowAsync()">Retry save</button><button class="secondary-action" @onclick="RequestReload">Reload saved model</button><span>Save a local copy before reloading if you want to keep your edits.</span></div> }
+            <div class="model-body">
+                <div class="@(!CanEdit ? "model-canvas is-readonly" : "model-canvas")">
+                    <SimpleXflowModeler ProjectName="@form.Name" Xml="@form.BpmnXml" LogicXml="@form.LogicXml" LogicTargetElementId="@form.LogicTargetElementId" Revision="@editorRevision" IsFullScreen="@isFullScreen" ReadOnly="@(!CanEdit || isImporting || isSwitchingModel)" OnModelChanged="OnEditorModelChangedAsync" OnDirty="OnEditorDirtyAsync" />
                 </div>
-                <div>
-                    <strong>2. Configure</strong>
-                    <span>Select an element to edit properties, requirements and validations.</span>
-                </div>
-                <div>
-                    <strong>3. Autosave</strong>
-                    <span>Every valid change is saved automatically to the tenant workspace.</span>
-                </div>
+                @if (showCollaboration && model is not null && workspace is not null)
+                {
+                    <aside class="collaboration-drawer"><div class="panel-heading"><strong>History &amp; work</strong><button class="icon-button" aria-label="Close collaboration" @onclick="() => showCollaboration = false">×</button></div><ModelCollaboration Model="model" Workspace="workspace" OnChanged="ReloadModelAsync" BeforeChange="PrepareCollaborationAsync" /></aside>
+                }
             </div>
-        }
-
-        <SimpleXflowModeler ProjectName="@form.Name" Xml="@form.BpmnXml" LogicXml="@form.LogicXml" LogicTargetElementId="@form.LogicTargetElementId" Revision="@editorRevision" IsFullScreen="@isFullScreen" OnModelChanged="OnEditorModelChangedAsync" />
+        </section>
     </section>
-</section>
-
+</div>
 @if (pendingSample is not null)
 {
-    <div class="confirmation-backdrop" role="presentation">
-        <div class="confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="replace-sample-title">
-            <span class="eyebrow">Load demo sample</span>
-            <h2 id="replace-sample-title">Replace current model?</h2>
-            <p>
-                Loading <strong>@pendingSample.Name</strong> replaces the model currently shown in the editor.
-                The replacement is saved automatically after you confirm.
-            </p>
-            <div class="confirmation-actions">
-                <button type="button" class="secondary-action" @onclick="CancelSampleLoad">Cancel</button>
-                <button type="button" class="primary-action" @onclick="ConfirmSampleLoadAsync">Replace model</button>
-            </div>
-        </div>
-    </div>
+    <div class="confirmation-backdrop"><section class="confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="replace-sample-title">
+        <span class="eyebrow">Model template</span><h2 id="replace-sample-title">Replace current model?</h2>
+        <p>Loading <strong>@pendingSample.Name</strong> replaces this model and saves a new revision. Earlier changes remain in the history.</p>
+        <div class="confirmation-actions"><button class="secondary-action" @onclick="CancelSampleLoad">Cancel</button><button class="primary-action" @onclick="ConfirmSampleLoadAsync">Replace model</button></div>
+    </section></div>
+}
+@if (confirmDelete)
+{
+    <div class="confirmation-backdrop"><section class="confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-title">
+        <h2 id="delete-title">Delete @form.Name?</h2><p>The model, its attachments and version history will be permanently deleted. Save a local copy if you need to keep it.</p>
+        <div class="confirmation-actions"><button class="secondary-action" @onclick="() => confirmDelete = false">Cancel</button><button class="danger-action" @onclick="DeleteAsync" disabled="@isSaving">Delete model</button></div>
+    </section></div>
+}
+@if (showMove)
+{
+    <div class="confirmation-backdrop"><section class="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="move-title">
+        <h2 id="move-title">Move model</h2><label class="field-label">Folder path<input class="form-control" @bind="moveFolder" list="model-folders" placeholder="Processes/Sales (empty for project root)" /></label>
+        <datalist id="model-folders">@foreach (var folder in container?.Folders ?? []) { <option value="@folder"></option> }</datalist>
+        <div class="confirmation-actions"><button class="secondary-action" @onclick="CancelMove">Cancel</button><button class="primary-action" @onclick="MoveAsync">Move</button></div>
+    </section></div>
 }
 
 @code {
@@ -166,6 +125,20 @@
     private const int AutosaveDelayMilliseconds = 1200;
     private static readonly TimeSpan EditorReadTimeout = TimeSpan.FromSeconds(5);
     private IReadOnlyList<ProjectSummary> projects = [];
+    private ProjectDetail? model;
+    private OrganizationSummary? organization;
+    private WorkspaceDetail? workspace;
+    private WorkspaceProjectSummary? container;
+    private IReadOnlyList<ModelPresence> presence = [];
+    private readonly CancellationTokenSource lifetime = new();
+    private Task? presenceTask;
+    private string moveFolder = "";
+    private bool allowNavigation;
+    private bool isSwitchingModel;
+    private bool showFiles, showCollaboration, showMove, confirmDelete, hasUnsavedChanges, disposed;
+    private bool CanEdit => model?.CanEdit == true;
+    private string ContainerHref => model?.WorkspaceId is { } workspaceId && model.WorkspaceProjectId is { } projectId
+        ? $"/workspaces/{workspaceId}/projects/{projectId}" : "/workspaces";
     private bool isSaving;
     private bool isImporting;
     private bool hasPendingAutosave;
@@ -195,13 +168,15 @@
         {
             if (!string.IsNullOrWhiteSpace(autosaveError))
             {
-                return autosaveError;
+                return "Not saved";
             }
 
             if (isSaving)
             {
                 return "Autosaving...";
             }
+
+            if (hasUnsavedChanges) return "Unsaved changes";
 
             if (lastAutosavedUtc is { } savedUtc)
             {
@@ -233,6 +208,14 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        if (!ProjectId.HasValue && string.IsNullOrWhiteSpace(SampleId))
+        {
+            NavigationManager.NavigateTo("/workspaces");
+            return;
+        }
+
+        await WorkspaceService.GetWorkspacesAsync();
+        organization ??= await WorkspaceService.GetOrganizationAsync();
         projects = await ProjectService.GetProjectsAsync();
 
         if (!ProjectId.HasValue
@@ -248,9 +231,14 @@
             var project = await ProjectService.GetProjectAsync(id);
             if (project is null)
             {
-                NavigationManager.NavigateTo("/projects");
+                NavigationManager.NavigateTo("/workspaces");
                 return;
             }
+
+            model = project;
+            workspace = project.WorkspaceId is { } workspaceId ? await WorkspaceService.GetWorkspaceAsync(workspaceId) : null;
+            container = workspace?.Projects.SingleOrDefault(p => p.Id == project.WorkspaceProjectId);
+            form.FolderPath = project.FolderPath;
 
             form.Name = project.Name;
             form.BpmnXml = GetValidBpmnXmlOrDefault(project.BpmnXml);
@@ -298,6 +286,132 @@
         }
     }
 
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (presenceTask is null && ProjectId.HasValue)
+            presenceTask = RunPresenceAsync();
+        return Task.CompletedTask;
+    }
+
+    private async Task RunPresenceAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(25));
+        try
+        {
+            do
+            {
+                await InvokeAsync(async () =>
+                {
+                    if (!isSaving && !isImporting && ProjectId is { } id)
+                    {
+                        try
+                        {
+                            presence = await ProjectService.HeartbeatAsync(id);
+                            var current = await ProjectService.GetProjectAsync(id);
+                            if (model is not null && current is not null)
+                                model = model with { CanEdit = current.CanEdit, CanManage = current.CanManage };
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            if (model is not null) model = model with { CanEdit = false, CanManage = false };
+                            statusMessage = "Workspace access has changed. You can save a local copy of your open model.";
+                        }
+                        StateHasChanged();
+                    }
+                });
+            } while (await timer.WaitForNextTickAsync(lifetime.Token));
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception) { /* Presence is advisory; model saves enforce permissions independently. */ }
+    }
+
+    private async Task BeforeNavigationAsync(LocationChangingContext context)
+    {
+        if (allowNavigation) { allowNavigation = false; return; }
+        if (CanEdit) await AutosaveNowAsync(readEditor: true);
+        if (hasUnsavedChanges || isSaving || !string.IsNullOrEmpty(autosaveError)) context.PreventNavigation();
+    }
+
+    private async Task SelectModelAsync(Guid id)
+    {
+        if (CanEdit) await AutosaveNowAsync(readEditor: true);
+        if (!hasUnsavedChanges) NavigateWithFreshEditor(GetProjectHref(id));
+    }
+
+    private async Task ToggleCollaborationAsync()
+    {
+        if (!showCollaboration && CanEdit) await AutosaveNowAsync(readEditor: true);
+        if (hasUnsavedChanges) return;
+        if (workspace is not null) workspace = await WorkspaceService.GetWorkspaceAsync(workspace.Id);
+        showCollaboration = !showCollaboration;
+    }
+
+    private async Task ReloadModelAsync()
+    {
+        if (ProjectId is not { } id) return;
+        if (hasUnsavedChanges) { statusMessage = "Save or export your pending edits before reloading."; return; }
+        var previousRevision = model?.Revision;
+        var changeVersion = await JSRuntime.InvokeAsync<long>("simpleXflowEditor.getChangeVersion", "simplexflow-editor");
+        var refreshed = await ProjectService.GetProjectAsync(id);
+        if (ProjectId != id || previousRevision != model?.Revision || hasUnsavedChanges
+            || changeVersion != await JSRuntime.InvokeAsync<long>("simpleXflowEditor.getChangeVersion", "simplexflow-editor")
+            || await JSRuntime.InvokeAsync<bool>("simpleXflowEditor.isDirty", "simplexflow-editor"))
+        {
+            statusMessage = "Your local edits were kept. Save them before reloading the model.";
+            return;
+        }
+        model = refreshed;
+        if (model is null) { NavigationManager.NavigateTo("/workspaces"); return; }
+        form.Name = model.Name;
+        form.BpmnXml = model.BpmnXml;
+        form.LogicXml = model.LogicXml;
+        form.FolderPath = model.FolderPath;
+        autosaveError = null;
+        if (previousRevision != model.Revision) editorRevision++;
+        if (workspace is not null) workspace = await WorkspaceService.GetWorkspaceAsync(workspace.Id);
+    }
+
+    private async Task RequestReload() => await JSRuntime.InvokeVoidAsync("simpleXflowFiles.reload");
+
+    private async Task<bool> PrepareCollaborationAsync()
+    {
+        if (CanEdit) await AutosaveNowAsync(readEditor: true);
+        return !hasUnsavedChanges && !isSaving;
+    }
+
+    private void OpenMove() { moveFolder = form.FolderPath; showMove = true; }
+    private Task CancelMove()
+    {
+        form.FolderPath = model?.FolderPath ?? "";
+        showMove = false;
+        return ScheduleAutosaveAsync();
+    }
+
+    private async Task MoveAsync()
+    {
+        form.FolderPath = string.Join('/', moveFolder.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        hasUnsavedChanges = true;
+        await AutosaveNowAsync();
+        if (string.IsNullOrEmpty(autosaveError)) showMove = false;
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (model is null || isSaving) return;
+        isSaving = true;
+        autosaveDelayCts?.Cancel();
+        try
+        {
+            await ProjectService.DeleteProjectAsync(model.Id, model.Revision);
+            var changeVersion = await JSRuntime.InvokeAsync<long>("simpleXflowEditor.getChangeVersion", "simplexflow-editor");
+            await JSRuntime.InvokeAsync<bool>("simpleXflowEditor.clearDirty", "simplexflow-editor", changeVersion);
+            hasUnsavedChanges = false;
+            NavigateWithFreshEditor(ContainerHref);
+        }
+        catch (Exception ex) { statusMessage = ex.Message; confirmDelete = false; }
+        finally { isSaving = false; }
+    }
+
     private void PrepareNewProject()
     {
         statusMessage = null;
@@ -314,12 +428,16 @@
 
     private async Task StartNewProjectAsync()
     {
-        if (isSaving || isImporting)
+        if (isSaving || isImporting || !CanEdit)
         {
             return;
         }
 
+        await AutosaveNowAsync(readEditor: true);
+        if (hasUnsavedChanges || !string.IsNullOrEmpty(autosaveError)) return;
+
         pendingSample = null;
+        isSwitchingModel = true;
         isSaving = true;
         statusMessage = "Creating saved simpleXflow project...";
         await InvokeAsync(StateHasChanged);
@@ -327,7 +445,7 @@
         try
         {
             var createdProjectId = await ProjectService.CreateProjectAsync(
-                new CreateProjectRequest("New project", DefaultBpmnXml));
+                new CreateProjectRequest("New model", DefaultBpmnXml, WorkspaceProjectId: model?.WorkspaceProjectId, FolderPath: form.FolderPath));
 
             NavigateWithFreshEditor($"/projects/{createdProjectId}");
         }
@@ -338,6 +456,7 @@
         finally
         {
             isSaving = false;
+            isSwitchingModel = false;
         }
     }
 
@@ -365,6 +484,12 @@
             return;
         }
 
+        if (CanEdit)
+        {
+            await AutosaveNowAsync(readEditor: true);
+            if (hasUnsavedChanges || !string.IsNullOrEmpty(autosaveError)) return;
+        }
+        hasUnsavedChanges = true;
         LoadSampleDraft(sample, ProjectId.HasValue);
         await AutosaveNowAsync(GetSampleSavedMessage(sample), readEditor: false);
     }
@@ -422,13 +547,17 @@
         return ScheduleAutosaveAsync();
     }
 
+    private Task OnEditorDirtyAsync(long version) => ScheduleAutosaveAsync();
+
     private Task ScheduleAutosaveAsync()
     {
-        if (isImporting)
+        if (!CanEdit || disposed)
         {
             return Task.CompletedTask;
         }
 
+        hasUnsavedChanges = true;
+        if (isImporting) return InvokeAsync(StateHasChanged);
         autosaveError = null;
         autosaveDelayCts?.Cancel();
         autosaveDelayCts?.Dispose();
@@ -461,9 +590,9 @@
         }
     }
 
-    private async Task AutosaveNowAsync(string? successMessage = null, bool readEditor = false)
+    private async Task AutosaveNowAsync(string? successMessage = null, bool readEditor = true)
     {
-        if (isImporting)
+        if (isImporting || disposed || (ProjectId.HasValue && !CanEdit))
         {
             return;
         }
@@ -482,16 +611,28 @@
         try
         {
             ValidateForm();
+            if (readEditor && ProjectId.HasValue && !hasUnsavedChanges
+                && !await JSRuntime.InvokeAsync<bool>("simpleXflowEditor.isDirty", "simplexflow-editor")) return;
+            var changeVersion = readEditor && ProjectId.HasValue
+                ? await JSRuntime.InvokeAsync<long>("simpleXflowEditor.getChangeVersion", "simplexflow-editor") : 0;
 
             if (readEditor)
             {
-                form.BpmnXml = await GetEditorXmlOrFallbackAsync();
-                form.LogicXml = await GetEditorLogicOrFallbackAsync();
+                form.BpmnXml = await ReadEditorXmlAsync();
+                form.LogicXml = await ReadEditorLogicAsync();
             }
 
             if (ProjectId is { } id)
             {
-                await ProjectService.UpdateProjectAsync(id, new UpdateProjectRequest(form.Name, form.BpmnXml, form.LogicXml));
+                var savedName = form.Name;
+                var savedXml = form.BpmnXml;
+                var savedLogic = form.LogicXml;
+                var savedFolder = form.FolderPath;
+                var revision = await ProjectService.UpdateProjectAsync(id, new UpdateProjectRequest(savedName, savedXml, savedLogic, model?.Revision, savedFolder));
+                if (model is not null) model = model with { Revision = revision, Name = savedName, BpmnXml = savedXml, LogicXml = savedLogic, FolderPath = savedFolder };
+                var editorSaved = !readEditor || await JSRuntime.InvokeAsync<bool>("simpleXflowEditor.clearDirty", "simplexflow-editor", changeVersion);
+                hasUnsavedChanges = !editorSaved || form.Name != savedName || form.FolderPath != savedFolder;
+                if (hasUnsavedChanges) hasPendingAutosave = true;
                 projects = await ProjectService.GetProjectsAsync();
                 lastAutosavedUtc = DateTimeOffset.UtcNow;
                 statusMessage = editorReadWarning ?? successMessage;
@@ -499,6 +640,7 @@
             else
             {
                 var createdProjectId = await ProjectService.CreateProjectAsync(new CreateProjectRequest(form.Name, form.BpmnXml, form.LogicXml));
+                hasUnsavedChanges = false;
                 lastAutosavedUtc = DateTimeOffset.UtcNow;
                 statusMessage = editorReadWarning ?? successMessage;
                 NavigateWithFreshEditor($"/projects/{createdProjectId}");
@@ -507,6 +649,7 @@
         }
         catch (Exception ex)
         {
+            hasUnsavedChanges = true;
             autosaveError = $"Autosave failed: {ex.Message}";
         }
         finally
@@ -523,42 +666,17 @@
         }
     }
 
-    private async Task<string> GetEditorXmlOrFallbackAsync()
+    private async Task<string> ReadEditorXmlAsync()
     {
-        try
-        {
-            using var timeout = new CancellationTokenSource(EditorReadTimeout);
-            var editorXml = await JSRuntime.InvokeAsync<string>("simpleXflowEditor.getXml", timeout.Token);
-            if (!string.IsNullOrWhiteSpace(editorXml))
-            {
-                return editorXml;
-            }
-        }
-        catch (Exception ex)
-        {
-            editorReadWarning = $"Saved using the last known simpleXflow model because the visual editor did not return XML. Details: {ex.Message}";
-        }
-
-        return GetValidBpmnXmlOrDefault(form.BpmnXml);
+        using var timeout = new CancellationTokenSource(EditorReadTimeout);
+        var xml = await JSRuntime.InvokeAsync<string>("simpleXflowEditor.getXml", timeout.Token);
+        return !string.IsNullOrWhiteSpace(xml) ? xml : throw new InvalidOperationException("The editor has not returned the current model. Keep this page open and try again.");
     }
 
-    private async Task<string?> GetEditorLogicOrFallbackAsync()
+    private async Task<string?> ReadEditorLogicAsync()
     {
-        try
-        {
-            using var timeout = new CancellationTokenSource(EditorReadTimeout);
-            var editorLogicXml = await JSRuntime.InvokeAsync<string?>("simpleXflowEditor.getLogic", timeout.Token);
-            if (!string.IsNullOrWhiteSpace(editorLogicXml))
-            {
-                return editorLogicXml;
-            }
-        }
-        catch
-        {
-            // Logic export is best-effort because the legacy editor stores it separately from the architecture XML.
-        }
-
-        return form.LogicXml;
+        using var timeout = new CancellationTokenSource(EditorReadTimeout);
+        return await JSRuntime.InvokeAsync<string?>("simpleXflowEditor.getLogic", timeout.Token);
     }
 
     private void ValidateForm()
@@ -575,17 +693,30 @@
 
     private async Task ImportProjectAsync(InputFileChangeEventArgs args)
     {
+        if (!CanEdit || isSaving || isImporting) return;
+        var sourceModelId = ProjectId;
+        var targetProjectId = model?.WorkspaceProjectId;
+        var targetFolder = form.FolderPath;
+        await AutosaveNowAsync(readEditor: true);
+        if (hasUnsavedChanges || !string.IsNullOrEmpty(autosaveError)) return;
         isImporting = true;
         statusMessage = null;
+        await InvokeAsync(StateHasChanged);
 
         try
         {
-            var importedProject = await ReadImportedProjectAsync(args.File);
+            await using var upload = args.File.OpenReadStream(ProjectFileImporter.MaxFileBytes);
+            var importedProject = await ProjectFileImporter.ReadAsync(upload, args.File.Name);
             var createdProjectId = await ProjectService.CreateProjectAsync(
-                new CreateProjectRequest(importedProject.Name, importedProject.BpmnXml, importedProject.LogicXml));
+                new CreateProjectRequest(importedProject.Name, importedProject.BpmnXml, importedProject.LogicXml, targetProjectId, targetFolder));
+
+            if (disposed || ProjectId != sourceModelId) return;
 
             projects = await ProjectService.GetProjectsAsync();
             statusMessage = $"Imported {importedProject.Name}.";
+            isImporting = false;
+            if (hasUnsavedChanges) await AutosaveNowAsync();
+            if (hasUnsavedChanges) return;
             NavigateWithFreshEditor($"/projects/{createdProjectId}");
         }
         catch (Exception ex)
@@ -598,74 +729,6 @@
         }
     }
 
-    private static async Task<ImportedProject> ReadImportedProjectAsync(IBrowserFile file)
-    {
-        var extension = Path.GetExtension(file.Name);
-
-        if (extension.Equals(".zip", StringComparison.OrdinalIgnoreCase))
-        {
-            return await ReadZipProjectAsync(file);
-        }
-
-        if (!extension.Equals(".bpmn", StringComparison.OrdinalIgnoreCase)
-            && !extension.Equals(".xml", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("Only simpleXflow project files with .bpmn, .xml or .zip can be imported.");
-        }
-
-        await using var stream = file.OpenReadStream(MaxImportFileBytes);
-        using var reader = new StreamReader(stream);
-        var xml = await reader.ReadToEndAsync();
-        EnsureBpmnXml(xml);
-
-        return new ImportedProject(GetProjectName(file.Name), xml, null);
-    }
-
-    private static async Task<ImportedProject> ReadZipProjectAsync(IBrowserFile file)
-    {
-        await using var uploadStream = file.OpenReadStream(MaxImportFileBytes);
-        using var archiveStream = new MemoryStream();
-        await uploadStream.CopyToAsync(archiveStream);
-        archiveStream.Position = 0;
-
-        using var archive = new ZipArchive(archiveStream, ZipArchiveMode.Read);
-        var bpmnEntry = archive.Entries
-            .Where(entry => !string.IsNullOrWhiteSpace(entry.Name)
-                && Path.GetExtension(entry.Name).Equals(".bpmn", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(entry => entry.FullName.Count(character => character is '/' or '\\'))
-            .ThenBy(entry => entry.FullName.Length)
-            .FirstOrDefault()
-            ?? throw new InvalidOperationException("The zip file does not contain a simpleXflow project file.");
-
-        using var entryStream = bpmnEntry.Open();
-        using var reader = new StreamReader(entryStream);
-        var xml = await reader.ReadToEndAsync();
-        EnsureBpmnXml(xml);
-
-        var projectName = string.IsNullOrWhiteSpace(Path.GetFileNameWithoutExtension(bpmnEntry.Name))
-            ? GetProjectName(file.Name)
-            : GetProjectName(bpmnEntry.Name);
-
-        return new ImportedProject(projectName, xml, null);
-    }
-
-    private static void EnsureBpmnXml(string xml)
-    {
-        if (string.IsNullOrWhiteSpace(xml)
-            || (!xml.Contains("<bpmn", StringComparison.OrdinalIgnoreCase)
-                && !xml.Contains(":definitions", StringComparison.OrdinalIgnoreCase)
-                && !xml.Contains("<definitions", StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException("The selected file is not a simpleXflow project file.");
-        }
-    }
-
-    private static string GetProjectName(string fileName)
-    {
-        var name = Path.GetFileNameWithoutExtension(fileName).Trim();
-        return string.IsNullOrWhiteSpace(name) ? "Imported project" : name;
-    }
-
     private static string GetValidBpmnXmlOrDefault(string? xml)
     {
         return string.IsNullOrWhiteSpace(xml) ? DefaultBpmnXml.Trim() : xml.Trim();
@@ -673,19 +736,29 @@
 
     private void NavigateWithFreshEditor(string uri)
     {
+        allowNavigation = true;
         NavigationManager.NavigateTo(uri, forceLoad: true);
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
+        disposed = true;
+        await lifetime.CancelAsync();
         autosaveDelayCts?.Cancel();
         autosaveDelayCts?.Dispose();
+        if (presenceTask is not null) await presenceTask;
+        if (presenceTask is not null && ProjectId is { } id)
+        {
+            try { await ProjectService.LeaveModelAsync(id); }
+            catch (Exception) { /* Presence expires after a disconnected circuit. */ }
+        }
+        lifetime.Dispose();
     }
 
     private sealed class ProjectForm
     {
         [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Project name is required.")]
-        [System.ComponentModel.DataAnnotations.StringLength(240, MinimumLength = 2, ErrorMessage = "Use at least 2 characters for the project name.")]
+        [System.ComponentModel.DataAnnotations.StringLength(240, MinimumLength = 1, ErrorMessage = "Use between 1 and 240 characters for the model name.")]
         public string Name { get; set; } = "";
 
         [System.ComponentModel.DataAnnotations.Required]
@@ -694,13 +767,11 @@
         public string? LogicXml { get; set; }
 
         public string? LogicTargetElementId { get; set; }
+
+        public string FolderPath { get; set; } = "";
     }
 
-    private sealed record ImportedProject(string Name, string BpmnXml, string? LogicXml);
-
-    private const long MaxImportFileBytes = 20 * 1024 * 1024;
-
-    private const string DefaultBpmnXml = """
+    internal const string DefaultBpmnXml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd" id="sample-diagram" targetNamespace="http://bpmn.io/schema/bpmn">
           <bpmn2:process id="Process_1" isExecutable="false">

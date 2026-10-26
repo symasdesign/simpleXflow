@@ -47,6 +47,16 @@ public sealed class ProjectVersion : ITenantEntity
 
     public DateTimeOffset CreatedUtc { get; private set; }
 
+    public string Label { get; set; } = "";
+
+    public string? CreatedBy { get; set; }
+
+    public DateTimeOffset? PlannedReleaseUtc { get; set; }
+
+    public DateTimeOffset? ReleasedUtc { get; set; }
+
+    public string? ReleasedBy { get; set; }
+
     private static string NormalizeName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))

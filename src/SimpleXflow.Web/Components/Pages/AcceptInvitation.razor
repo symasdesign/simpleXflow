@@ -1,0 +1,81 @@
+@page "/invitations/accept"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Identity
+@using SimpleXflow.Application.Workspaces
+@using SimpleXflow.Infrastructure.Identity
+@using SimpleXflow.Web.Components.Account.Shared
+@inject IWorkspaceService WorkspaceService
+@inject AuthenticationStateProvider Authentication
+@inject UserManager<ApplicationUser> UserManager
+@inject NavigationManager Navigation
+
+<PageTitle>Workspace invitation</PageTitle>
+<AccountFormShell>
+    <h1>Workspace invitation</h1>
+    <p class="account-intro">Join a shared workspace while keeping your own organization. The invitation can only be accepted by the account with the invited, confirmed email address.</p>
+    @if (string.IsNullOrWhiteSpace(Token))
+    {
+        <p class="account-notice" role="alert">This invitation link is incomplete. Ask the workspace owner for a new link.</p>
+    }
+    else if (!isAuthenticated)
+    {
+        <div class="account-actions">
+            <a class="primary-action" href="@LoginUrl">Log in to accept</a>
+            <a class="secondary-action" href="@RegisterUrl">Create a simpleXflow account</a>
+        </div>
+    }
+    else
+    {
+        <p>Signed in as <strong>@email</strong></p>
+        @if (!emailConfirmed)
+        {
+            <p class="account-notice">Confirm your email address first, then return to this invitation.</p>
+            <a href="@ConfirmationUrl">Send confirmation email</a>
+        }
+        else
+        {
+            <button class="primary-action" disabled="@busy" @onclick="AcceptAsync">@(busy ? "Joining workspace..." : "Accept invitation")</button>
+        }
+    }
+    @if (message is not null)
+    {
+        <p class="account-notice" role="alert">@message</p>
+    }
+</AccountFormShell>
+
+@code {
+    [SupplyParameterFromQuery(Name = "token")] public string? Token { get; set; }
+    private bool isAuthenticated;
+    private bool emailConfirmed;
+    private bool busy;
+    private string? email;
+    private string? message;
+    private string ReturnUrl => $"/invitations/accept?token={Uri.EscapeDataString(Token ?? "")}";
+    private string LoginUrl => $"/Account/Login?ReturnUrl={Uri.EscapeDataString(ReturnUrl)}";
+    private string RegisterUrl => $"/Account/Register?ReturnUrl={Uri.EscapeDataString(ReturnUrl)}";
+    private string ConfirmationUrl => $"/Account/ResendEmailConfirmation?ReturnUrl={Uri.EscapeDataString(ReturnUrl)}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var state = await Authentication.GetAuthenticationStateAsync();
+        isAuthenticated = state.User.Identity?.IsAuthenticated == true;
+        if (!isAuthenticated) return;
+        var user = await UserManager.GetUserAsync(state.User);
+        email = user?.Email;
+        emailConfirmed = user?.EmailConfirmed == true;
+    }
+
+    private async Task AcceptAsync()
+    {
+        if (busy || string.IsNullOrWhiteSpace(Token)) return;
+        busy = true;
+        message = null;
+        try
+        {
+            var workspaceId = await WorkspaceService.AcceptInvitationAsync(Token);
+            Navigation.NavigateTo($"/workspaces/{workspaceId}", forceLoad: true);
+        }
+        catch (Exception exception) { message = exception.Message; }
+        finally { busy = false; }
+    }
+}

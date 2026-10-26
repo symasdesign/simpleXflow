@@ -25,6 +25,14 @@ public sealed class FlowProject : ITenantEntity
 
     public Guid TenantId { get; set; }
 
+    public Guid? WorkspaceProjectId { get; set; }
+
+    public string FolderPath { get; set; } = "";
+
+    public long Revision { get; set; }
+
+    public string? LastEditedBy { get; set; }
+
     public string Name { get; private set; } = "";
 
     public string BpmnXml { get; private set; } = "";
@@ -118,7 +126,7 @@ public sealed class FlowProject : ITenantEntity
         }
 
         BpmnXml = NormalizeModelXml(bpmnXml);
-        LogicXml = string.IsNullOrWhiteSpace(logicXml) ? null : logicXml;
+        LogicXml = NormalizeLogicXml(logicXml);
     }
 
     private void ClearUndoSnapshot()

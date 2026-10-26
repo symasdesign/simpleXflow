@@ -7,6 +7,8 @@ namespace SimpleXflow.Infrastructure.Services;
 
 public sealed class CurrentTenantContext(IHttpContextAccessor httpContextAccessor) : ITenantContext
 {
+    public string? UserId => httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
     public bool IsAvailable => TryGetTenantId(out _);
 
     public Guid TenantId => TryGetTenantId(out var tenantId)

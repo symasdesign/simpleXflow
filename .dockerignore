@@ -6,6 +6,11 @@
 **/bin
 **/obj
 **/artifacts
+**/node_modules
+**/.npm-cache
+**/TestResults
+**/test-results
+**/playwright-report
 **/Data/*.db
 **/Data/*.db-shm
 **/Data/*.db-wal

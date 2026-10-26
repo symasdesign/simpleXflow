@@ -1,0 +1,138 @@
+@using SimpleXflow.Application.Workspaces
+@inject IWorkspaceService WorkspaceService
+@inject NavigationManager Navigation
+
+<section class="collaboration-panel" aria-label="Workspace members">
+    <div class="section-heading"><h2>Members</h2><span>@Workspace.Members.Count</span></div>
+    <p class="muted">Workspace access also includes its projects, folders and models. Guests keep their own organization.</p>
+    @if (message is not null)
+    {
+        <p class="feedback" role="status">@message</p>
+    }
+    <div class="member-list">
+        @foreach (var member in Workspace.Members)
+        {
+            <div class="member-row" @key="member.UserId">
+                <div class="member-name"><strong>@member.Email</strong><small>@member.OrganizationName</small></div>
+                @if (CanManage && member.Role != "Owner" && (Workspace.Role == "Owner" || member.Role != "Admin"))
+                {
+                    <select class="form-select" aria-label="@($"Role for {member.Email}")" value="@member.Role" disabled="@busy" @onchange="e => ChangeRoleAsync(member.UserId, e.Value?.ToString())">
+                        @if (Workspace.Role == "Owner") { <option>Admin</option> }<option>Editor</option><option>Viewer</option>
+                    </select>
+                    @if (removingUserId == member.UserId)
+                    {
+                        <button class="danger-button" disabled="@busy" @onclick="() => RemoveAsync(member.UserId)">Confirm removal</button>
+                        <button class="text-button" @onclick="() => removingUserId = null">Cancel</button>
+                    }
+                    else
+                    {
+                        <button class="text-button" disabled="@busy" @onclick="() => removingUserId = member.UserId">Remove</button>
+                    }
+                }
+                else
+                {
+                    <span class="role-badge">@member.Role</span>
+                }
+            </div>
+        }
+    </div>
+    <p class="muted role-help">Owner / Admin: manage access and releases · Editor: change models · Viewer: read models.</p>
+    @if (CanManage)
+    {
+        <form class="invite-form" @onsubmit="InviteAsync" @onsubmit:preventDefault>
+            <h3>Invite a member</h3>
+            <label>Email<input type="email" class="form-control" @bind="email" required maxlength="254" placeholder="colleague@example.com" /></label>
+            <label>Role<select class="form-select" @bind="invitationRole"><option>Editor</option><option>Viewer</option>@if (Workspace.Role == "Owner") { <option>Admin</option> }</select></label>
+            <button type="submit" class="primary-action" disabled="@busy">Create invitation link</button>
+        </form>
+        @if (invitationLink is not null)
+        {
+            <div class="invitation-result" role="status">
+                <strong>Invitation ready for @invitedEmail</strong>
+                <p>Send this private link to the invited person. No email has been sent. The recipient needs a simpleXflow account with this confirmed email address.</p>
+                <label>Invitation link<input class="form-control" value="@invitationLink" readonly @onclick="SelectLinkAsync" @ref="linkInput" /></label>
+                <small>Valid until @invitationExpires?.ToLocalTime().ToString("g"). The link is shown only now.</small>
+            </div>
+        }
+        @if (Workspace.Invitations.Count > 0)
+        {
+            <h3>Pending invitations</h3>
+            @foreach (var invitation in Workspace.Invitations)
+            {
+                <div class="member-row" @key="invitation.Id">
+                    <div class="member-name"><strong>@invitation.Email</strong><small>@invitation.Role · Expires @invitation.ExpiresUtc.ToLocalTime().ToString("g")</small></div>
+                    @if (Workspace.Role == "Owner" || invitation.Role != "Admin")
+                    {
+                        <button class="text-button" disabled="@busy" @onclick="() => RevokeAsync(invitation.Id)">Revoke</button>
+                    }
+                </div>
+            }
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public WorkspaceDetail Workspace { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+    private bool CanManage => Workspace.Role is "Owner" or "Admin";
+    private bool busy;
+    private string email = "";
+    private string invitationRole = "Editor";
+    private string? invitationLink;
+    private string? invitedEmail;
+    private DateTimeOffset? invitationExpires;
+    private string? removingUserId;
+    private string? message;
+    private Guid loadedWorkspaceId;
+    private ElementReference linkInput;
+
+    protected override void OnParametersSet()
+    {
+        if (loadedWorkspaceId == Workspace.Id) return;
+        loadedWorkspaceId = Workspace.Id;
+        invitationLink = null;
+        removingUserId = null;
+        message = null;
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        if (busy) return;
+        busy = true;
+        message = null;
+        try { await action(); await OnChanged.InvokeAsync(); }
+        catch (Exception exception) { message = exception.Message; }
+        finally { busy = false; }
+    }
+
+    private Task InviteAsync() => RunAsync(async () =>
+    {
+        var invitation = await WorkspaceService.CreateInvitationAsync(Workspace.Id, email, invitationRole);
+        invitationLink = Navigation.ToAbsoluteUri($"invitations/accept?token={Uri.EscapeDataString(invitation.Token)}").AbsoluteUri;
+        invitedEmail = email.Trim();
+        invitationExpires = invitation.ExpiresUtc;
+        email = "";
+    });
+
+    private Task ChangeRoleAsync(string userId, string? role) => RunAsync(async () =>
+    {
+        await WorkspaceService.SetMemberRoleAsync(Workspace.Id, userId, role ?? "Viewer");
+        message = "Member role updated.";
+    });
+
+    private Task RemoveAsync(string userId) => RunAsync(async () =>
+    {
+        await WorkspaceService.RemoveMemberAsync(Workspace.Id, userId);
+        removingUserId = null;
+        message = "Member access removed.";
+    });
+
+    private Task RevokeAsync(Guid invitationId) => RunAsync(async () =>
+    {
+        await WorkspaceService.RevokeInvitationAsync(Workspace.Id, invitationId);
+        invitationLink = null;
+        message = "Invitation revoked.";
+    });
+
+    private async Task SelectLinkAsync() => await linkInput.FocusAsync();
+}

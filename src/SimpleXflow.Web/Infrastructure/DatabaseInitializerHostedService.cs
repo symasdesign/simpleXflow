@@ -53,6 +53,7 @@ internal sealed class DatabaseInitializer(
                 }
 
                 await dbContext.Database.EnsureCreatedAsync(cancellationToken);
+                await SqliteSchemaUpgrade.ApplyAsync(dbContext, cancellationToken);
                 logger.LogInformation("Local database schema is available.");
                 return;
             }

@@ -5,4 +5,6 @@ public interface ITenantContext
     bool IsAvailable { get; }
 
     Guid TenantId { get; }
+
+    string? UserId => null;
 }

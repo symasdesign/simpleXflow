@@ -1,0 +1,10 @@
+<section class="account-shell">
+    <div class="account-card">
+        <a class="account-brand" href="/"><img src="brand/simplexflow-logo.svg" alt="simpleXflow" /></a>
+        @ChildContent
+    </div>
+</section>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

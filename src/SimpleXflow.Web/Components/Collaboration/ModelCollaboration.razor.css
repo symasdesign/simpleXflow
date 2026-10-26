@@ -1,0 +1,21 @@
+.collaboration-panel { padding: 1.25rem; background: #fff; border: 1px solid #e2e6ed; border-radius: 8px; }
+.section-heading, .version-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+h2 { font-size: 1.1rem; margin: 0; }
+.muted, small { color: #64748b; font-size: .82rem; }
+.muted { margin: .6rem 0 1rem; }
+.compact-form { display: flex; align-items: end; gap: .7rem; flex-wrap: wrap; padding-bottom: .75rem; }
+label { display: grid; gap: .3rem; font-size: .82rem; flex: 1; min-width: 130px; }
+.full-width { flex-basis: 100%; }
+.form-control, .form-select { font-size: .85rem; }
+.version-row, .task-row { padding: .85rem 0; border-top: 1px solid #edf0f5; }
+.version-row small, .task-row small { display: block; margin-top: .2rem; }
+.version-heading strong { font-size: .88rem; font-weight: 600; overflow-wrap: anywhere; }
+.release-badge, .status-badge { white-space: nowrap; font-size: .72rem; border-radius: 4px; padding: .2rem .4rem; background: #ecfdf5; color: #047857; }
+.status-badge { color: #475569; background: #f1f5f9; }
+.text-button { background: none; color: #365eae; border: none; font-size: .8rem; padding: .2rem 0; }
+.row-actions { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; margin-top: .4rem; }
+.task-heading { margin-top: 1.5rem; }
+.task-row p { font-size: .85rem; margin: .5rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.task-row label { max-width: 180px; margin-top: .5rem; }
+.task-row .overdue { color: #b45309; }
+.feedback { padding: .65rem; border-radius: 4px; background: #f1f5f9; font-size: .85rem; }

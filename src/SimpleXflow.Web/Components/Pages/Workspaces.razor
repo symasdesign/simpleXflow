@@ -1,0 +1,264 @@
+@page "/workspaces"
+@page "/workspaces/{WorkspaceId:guid}"
+@page "/workspaces/{WorkspaceId:guid}/projects/{ContainerId:guid}"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using Microsoft.AspNetCore.Components.Sections
+@using SimpleXflow.Application.Workspaces
+@using SimpleXflow.Application.Projects
+@using SimpleXflow.Web.Components.Collaboration
+@using SimpleXflow.Web.Infrastructure
+@inject IWorkspaceService WorkspaceService
+@inject IFlowProjectService ModelService
+@inject NavigationManager Navigation
+
+<PageTitle>@(workspace?.Name ?? "Workspaces") · simpleXflow</PageTitle>
+<SectionContent SectionName="context-navigation">
+    <nav class="breadcrumbs" aria-label="Breadcrumb">
+        <a href="workspaces">@organization?.Name</a>
+        @if (workspace is not null) { <span>/</span><a href="@($"workspaces/{workspace.Id}")">@workspace.Name</a> }
+        @if (container is not null) { <span>/</span><a href="@ProjectHref">@container.Name</a> }
+        @if (!string.IsNullOrEmpty(Folder)) { <span>/</span><span>@Folder</span> }
+    </nav>
+</SectionContent>
+<div class="hub-shell" data-interactive="@interactiveReady.ToString().ToLowerInvariant()">
+    <section class="hub-main">
+        @if (!string.IsNullOrEmpty(message)) { <div class="hub-message" role="status">@message</div> }
+        @if (loading)
+        {
+            <div class="empty-state">Loading workspace…</div>
+        }
+        else if (WorkspaceId.HasValue && workspace is null)
+        {
+            <div class="hub-empty"><h1>Workspace unavailable</h1><p>You may no longer have access to this workspace.</p><a href="workspaces">Back to your workspaces</a></div>
+        }
+        else if (workspace is null)
+        {
+            <div class="hub-heading"><div><h1>Workspaces</h1><p>Organize your projects and collaborate with your team across organizations.</p></div><button class="primary-action" @onclick='() => OpenCreate("workspace")'>New workspace</button></div>
+            @if (workspaces.Count == 0)
+            {
+                <div class="hub-empty"><span class="empty-icon" aria-hidden="true">W</span><h2>Your first workspace</h2><p>Create a workspace, add projects and invite your collaborators.</p><button class="primary-action" @onclick='() => OpenCreate("workspace")'>Create workspace</button></div>
+            }
+            else
+            {
+                <div class="workspace-list-toolbar">
+                    <label class="search-box"><span aria-hidden="true">⌕</span><input type="search" @bind="search" @bind:event="oninput" placeholder="Search workspaces" aria-label="Search workspaces" /></label>
+                    <select class="hub-select" @bind="workspaceFilter" aria-label="Filter workspaces"><option value="all">All workspaces</option><option value="own">My organization</option><option value="shared">Shared with me</option></select>
+                    <div class="list-display-options">
+                        <select class="hub-select" @bind="workspaceSort" aria-label="Sort workspaces"><option value="name">Name (A–Z)</option><option value="projects">Most projects</option></select>
+                        <div class="view-toggle" role="group" aria-label="Workspace view">
+                            <button class="@(workspaceListView ? "" : "active")" aria-pressed="@((!workspaceListView).ToString().ToLowerInvariant())" @onclick="() => workspaceListView = false">Grid</button>
+                            <button class="@(workspaceListView ? "active" : "")" aria-pressed="@workspaceListView.ToString().ToLowerInvariant()" @onclick="() => workspaceListView = true">List</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="@(workspaceListView ? "workspace-grid workspace-list" : "workspace-grid")">
+                    @foreach (var item in VisibleWorkspaces)
+                    {
+                        <article class="workspace-card" aria-labelledby="@($"workspace-{item.Id}")">
+                            <div class="workspace-card-heading"><span class="workspace-icon" aria-hidden="true">W</span><span class="role-badge">@item.Role</span></div>
+                            <div class="workspace-card-details"><h2 id="@($"workspace-{item.Id}")"><a href="@($"workspaces/{item.Id}")">@item.Name</a></h2><p>@(item.IsShared ? $"Shared by {item.OrganizationName}" : item.OrganizationName)</p></div>
+                            <span class="workspace-project-count">@item.ProjectCount @(item.ProjectCount == 1 ? "project" : "projects")</span>
+                            <div class="workspace-card-actions"><a href="@($"workspaces/{item.Id}")">Open <span aria-hidden="true">→</span></a>@if (item.Role is "Owner" or "Admin") { <a href="@($"workspaces/{item.Id}?section=members")">Manage</a> }</div>
+                        </article>
+                    }
+                </div>
+                @if (!VisibleWorkspaces.Any()) { <div class="hub-empty"><h2>No matching workspaces</h2><p>Try another name or change the workspace filter.</p></div> }
+            }
+        }
+        else
+        {
+            <div class="hub-heading"><div><span class="eyebrow">@(container is null ? "Workspace" : "Project")</span><h1>@(container?.Name ?? workspace.Name)</h1><p>@workspace.OrganizationName <span class="role-badge">@workspace.Role</span></p></div>
+                <div class="toolbar-actions">
+                    @if (CanEdit && activeTab == "files")
+                    {
+                        @if (container is null) { <button class="primary-action" @onclick='() => OpenCreate("project")'>New project</button> }
+                        else
+                        {
+                            <button class="secondary-action" @onclick='() => OpenCreate("folder")'>New folder</button>
+                            <label class="secondary-action import-action">Import<InputFile id="hub-import-file" OnChange="ImportAsync" accept=".bpmn,.xml,.zip,.sxf" class="import-file-input" disabled="@busy" /></label>
+                            <button class="primary-action" @onclick='() => OpenCreate("model")'>New model</button>
+                        }
+                    }
+                </div>
+            </div>
+            <nav class="hub-tabs" aria-label="Workspace sections">
+                <button class="@(activeTab == "files" ? "active" : "")" @onclick='() => SelectSection("files")'>@(container is null ? "Projects" : "Models")</button>
+                <button class="@(activeTab == "members" ? "active" : "")" @onclick='() => SelectSection("members")'>Members <span>@workspace.Members.Count</span></button>
+                <button class="@(activeTab == "tasks" ? "active" : "")" @onclick='() => SelectSection("tasks")'>Work packages <span>@workspace.WorkPackages.Count</span></button>
+            </nav>
+            @if (activeTab == "members")
+            {
+                <WorkspaceMembers Workspace="workspace" OnChanged="ReloadAsync" />
+            }
+            else if (activeTab == "tasks")
+            {
+                <ModelCollaboration Workspace="workspace" OnChanged="ReloadAsync" />
+            }
+            else
+            {
+                <div class="file-list-toolbar">
+                    <label class="search-box"><span aria-hidden="true">⌕</span><input type="search" @bind="search" @bind:event="oninput" placeholder="@(container is null ? "Search projects" : "Search models and folders")" aria-label="Search files" /></label>
+                    <div class="list-display-options"><span>@(container is null ? $"{VisibleProjects.Count()} projects" : $"{visibleModels.Count()} models")</span><select class="hub-select" @bind="fileSort" aria-label="Sort files"><option value="name">Name (A–Z)</option>@if (container is null) { <option value="models">Most models</option> } else { <option value="updated">Last updated</option> }</select></div>
+                </div>
+                <div class="file-table" role="table" aria-label="@(container is null ? "Projects" : "Models and folders")">
+                    <div class="file-table-head" role="row"><span role="columnheader">Name</span><span role="columnheader">@(container is null ? "Contents" : "Last updated")</span><span role="columnheader">Type</span></div>
+                    @if (container is null)
+                    {
+                        @foreach (var project in VisibleProjects)
+                        {
+                            <a class="file-table-row" role="row" href="@($"workspaces/{workspace.Id}/projects/{project.Id}")"><span role="cell"><span class="file-icon" aria-hidden="true">▣</span>@project.Name</span><span role="cell">@project.ModelCount models</span><span role="cell">Project</span></a>
+                        }
+                    }
+                    else
+                    {
+                        @if (!string.IsNullOrEmpty(Folder)) { <a class="file-table-row" href="@FolderHref(ParentFolder)"><span>↰ Parent folder</span><span></span><span>Folder</span></a> }
+                        @foreach (var path in VisibleFolders)
+                        {
+                            <a class="file-table-row" role="row" href="@FolderHref(path)"><span role="cell"><span class="file-icon folder-icon" aria-hidden="true">▰</span>@path.Split('/').Last()</span><span role="cell">—</span><span role="cell">Folder</span></a>
+                        }
+                        @foreach (var model in visibleModels)
+                        {
+                            <a class="file-table-row" role="row" href="@($"projects/{model.Id}")" data-enhance-nav="false"><span role="cell"><span class="file-icon" aria-hidden="true">◇</span>@model.Name</span><span role="cell">@model.UpdatedUtc.ToLocalTime().ToString("g")</span><span role="cell">simpleXflow</span></a>
+                        }
+                    }
+                </div>
+                @if (container is null && workspace.Projects.Count == 0) { <div class="hub-empty"><h2>No projects yet</h2><p>Projects group your models and folders within this workspace.</p></div> }
+                else if (container is null && !VisibleProjects.Any()) { <div class="hub-empty"><h2>No matching projects</h2><p>Try another project name.</p></div> }
+                @if (container is not null && !visibleModels.Any() && !VisibleFolders.Any()) { <div class="hub-empty"><h2>@(string.IsNullOrEmpty(search) ? "No models here yet" : "No matching models or folders")</h2><p>@(string.IsNullOrEmpty(search) ? "Create a model, import a file or organize your work with folders." : "Try another model or folder name.")</p></div> }
+            }
+        }
+    </section>
+</div>
+@if (createKind is not null)
+{
+    <div class="confirmation-backdrop"><section class="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="create-heading">
+        <h2 id="create-heading">New @createKind</h2>
+        <form @onsubmit="CreateAsync" @onsubmit:preventDefault>
+            <label class="field-label">@(createKind == "folder" ? "Folder path" : "Name")<input class="form-control" @bind="newName" required maxlength="200" autofocus placeholder="@(createKind == "folder" ? "Processes / Sales" : "Enter a name")" /></label>
+            @if (createKind == "workspace") { <p class="muted">You become the owner. Invite members after creating the workspace.</p> }
+            @if (!string.IsNullOrEmpty(createError)) { <p class="text-danger" role="alert">@createError</p> }
+            <div class="confirmation-actions"><button type="button" class="secondary-action" @onclick="CloseCreate" disabled="@busy">Cancel</button><button type="submit" class="primary-action" disabled="@busy">@(busy ? "Creating…" : "Create")</button></div>
+        </form>
+    </section></div>
+}
+
+@code {
+    [Parameter] public Guid? WorkspaceId { get; set; }
+    [Parameter] public Guid? ContainerId { get; set; }
+    [SupplyParameterFromQuery(Name = "folder")] public string? Folder { get; set; }
+    [SupplyParameterFromQuery(Name = "section")] public string? Section { get; set; }
+    private OrganizationSummary? organization;
+    private IReadOnlyList<WorkspaceSummary> workspaces = [];
+    private WorkspaceDetail? workspace;
+    private WorkspaceProjectSummary? container;
+    private IReadOnlyList<ProjectSummary> models = [];
+    private bool loading = true, busy, interactiveReady, workspaceListView;
+    private string activeTab = "files", search = "", newName = "";
+    private string workspaceFilter = "all", workspaceSort = "name", fileSort = "name";
+    private string? message, createKind, createError;
+    private bool CanEdit => workspace?.Role is "Owner" or "Admin" or "Editor";
+    private string ProjectHref => $"workspaces/{WorkspaceId}/projects/{ContainerId}";
+    private string ParentFolder => (Folder ?? "").Contains('/') ? Folder![..Folder!.LastIndexOf('/')] : "";
+    private IEnumerable<WorkspaceSummary> VisibleWorkspaces
+    {
+        get
+        {
+            var filtered = workspaces.Where(w => (Matches(w.Name) || Matches(w.OrganizationName)) && (workspaceFilter == "all" || (workspaceFilter == "shared" ? w.IsShared : !w.IsShared)));
+            return workspaceSort == "projects" ? filtered.OrderByDescending(w => w.ProjectCount).ThenBy(w => w.Name, StringComparer.OrdinalIgnoreCase) : filtered.OrderBy(w => w.Name, StringComparer.OrdinalIgnoreCase);
+        }
+    }
+    private IEnumerable<WorkspaceProjectSummary> VisibleProjects
+    {
+        get
+        {
+            var filtered = (workspace?.Projects ?? []).Where(p => Matches(p.Name));
+            return fileSort == "models" ? filtered.OrderByDescending(p => p.ModelCount).ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase) : filtered.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase);
+        }
+    }
+    private IEnumerable<ProjectSummary> visibleModels
+    {
+        get
+        {
+            var filtered = models.Where(m => m.WorkspaceProjectId == ContainerId && m.FolderPath == (Folder ?? "") && Matches(m.Name));
+            return fileSort == "updated" ? filtered.OrderByDescending(m => m.UpdatedUtc).ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase) : filtered.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase);
+        }
+    }
+    private IEnumerable<string> ChildFolders => (container?.Folders ?? []).Concat(models.Where(m => m.WorkspaceProjectId == ContainerId).Select(m => m.FolderPath))
+        .Where(p => p.Length > (Folder ?? "").Length && (string.IsNullOrEmpty(Folder) || p.StartsWith(Folder + "/", StringComparison.Ordinal)))
+        .Select(p => string.IsNullOrEmpty(Folder) ? p.Split('/')[0] : Folder + "/" + p[(Folder!.Length + 1)..].Split('/')[0]).Distinct().Order();
+    private IEnumerable<string> VisibleFolders => ChildFolders.Where(p => Matches(p.Split('/').Last()));
+    private bool Matches(string value) => value.Contains(search, StringComparison.OrdinalIgnoreCase);
+    private string FolderHref(string path) => $"{ProjectHref}?folder={Uri.EscapeDataString(path)}";
+    private void SelectSection(string section) => Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("section", section == "files" ? null : section));
+    protected override async Task OnParametersSetAsync() { activeTab = Section is "members" or "tasks" ? Section : "files"; search = ""; fileSort = ContainerId.HasValue ? "updated" : "name"; await ReloadAsync(); }
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) { interactiveReady = true; StateHasChanged(); }
+        return Task.CompletedTask;
+    }
+    private async Task ReloadAsync()
+    {
+        loading = organization is null;
+        try
+        {
+            workspaces = await WorkspaceService.GetWorkspacesAsync();
+            organization = await WorkspaceService.GetOrganizationAsync();
+            workspace = WorkspaceId is { } id ? await WorkspaceService.GetWorkspaceAsync(id) : null;
+            container = workspace?.Projects.SingleOrDefault(p => p.Id == ContainerId);
+            models = container is null ? [] : await ModelService.GetProjectsAsync();
+            if (ContainerId.HasValue && workspace is not null && container is null) message = "This project is no longer available.";
+        }
+        catch (Exception ex) { message = ex.Message; }
+        finally { loading = false; }
+    }
+    private void OpenCreate(string kind) { createKind = kind; newName = ""; createError = null; }
+    private void CloseCreate() { createKind = null; }
+    private async Task CreateAsync()
+    {
+        if (busy) return;
+        busy = true;
+        var targetWorkspaceId = WorkspaceId;
+        var targetProjectId = ContainerId;
+        var targetFolder = Folder ?? "";
+        try
+        {
+            if (string.IsNullOrWhiteSpace(newName)) throw new InvalidOperationException("Enter a name.");
+            switch (createKind)
+            {
+                case "workspace":
+                    var workspaceId = await WorkspaceService.CreateWorkspaceAsync(newName);
+                    Navigation.NavigateTo($"workspaces/{workspaceId}"); break;
+                case "project" when targetWorkspaceId.HasValue:
+                    var projectId = await WorkspaceService.CreateProjectAsync(targetWorkspaceId.Value, newName);
+                    if (WorkspaceId == targetWorkspaceId) Navigation.NavigateTo($"workspaces/{targetWorkspaceId}/projects/{projectId}"); break;
+                case "folder" when targetProjectId.HasValue:
+                    await WorkspaceService.CreateFolderAsync(targetProjectId.Value, string.IsNullOrEmpty(targetFolder) ? newName : $"{targetFolder}/{newName}");
+                    await ReloadAsync(); break;
+                case "model" when targetProjectId.HasValue:
+                    var modelId = await ModelService.CreateProjectAsync(new(newName, Projects.DefaultBpmnXml, WorkspaceProjectId: targetProjectId, FolderPath: targetFolder));
+                    if (ContainerId == targetProjectId) Navigation.NavigateTo($"projects/{modelId}", forceLoad: true); break;
+            }
+            createKind = null;
+        }
+        catch (Exception ex) { createError = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task ImportAsync(InputFileChangeEventArgs args)
+    {
+        if (busy || !CanEdit || container is null) return;
+        var targetProjectId = container.Id;
+        var targetFolder = Folder ?? "";
+        busy = true;
+        try
+        {
+            await using var stream = args.File.OpenReadStream(ProjectFileImporter.MaxFileBytes);
+            var imported = await ProjectFileImporter.ReadAsync(stream, args.File.Name);
+            var id = await ModelService.CreateProjectAsync(new(imported.Name, imported.BpmnXml, imported.LogicXml, targetProjectId, targetFolder));
+            if (ContainerId == targetProjectId && (Folder ?? "") == targetFolder) Navigation.NavigateTo($"projects/{id}", forceLoad: true);
+            else message = $"Imported {imported.Name} into the originally selected project and folder.";
+        }
+        catch (Exception ex) { message = $"Import failed: {ex.Message}"; }
+        finally { busy = false; }
+    }
+}

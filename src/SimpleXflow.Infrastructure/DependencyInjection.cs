@@ -8,6 +8,8 @@ using SimpleXflow.Infrastructure.Identity;
 using SimpleXflow.Infrastructure.Persistence;
 using SimpleXflow.Infrastructure.Projects;
 using SimpleXflow.Infrastructure.Services;
+using SimpleXflow.Application.Workspaces;
+using SimpleXflow.Infrastructure.Workspaces;
 
 namespace SimpleXflow.Infrastructure;
 
@@ -57,6 +59,7 @@ public static class DependencyInjection
 
         services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, TenantClaimsPrincipalFactory>();
         services.AddScoped<IFlowProjectService, FlowProjectService>();
+        services.AddScoped<IWorkspaceService, WorkspaceService>();
 
         return services;
     }

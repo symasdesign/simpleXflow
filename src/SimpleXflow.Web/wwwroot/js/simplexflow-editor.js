@@ -20,7 +20,15 @@ window.simpleXflowEditor = (() => {
   let currentArchitectureXml = "";
   let currentLogicXml = "";
   let openAttemptId = 0;
+  const modelSyncDepth = { architecture: 0, logic: 0 };
   const decodeUriComponent = globalThis.decodeURIComponent?.bind(globalThis);
+
+  window.addEventListener("beforeunload", event => {
+    if ([...editorStates.values()].some(state => state.dirty && !state.readOnly)) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+  });
 
   function getCallbackList(name) {
     if (!callbacks.has(name)) {
@@ -30,15 +38,13 @@ window.simpleXflowEditor = (() => {
     return callbacks.get(name);
   }
 
-  function emit(name, ...args) {
-    for (const callback of getCallbackList(name)) {
-      callback({}, ...args);
-    }
-  }
-
-  function emitRaw(name, ...args) {
-    for (const callback of getCallbackList(name)) {
-      callback(...args);
+  async function emit(name, ...args) {
+    const model = name === "openLogic" || name === "adjustResourcesInLogic" ? "logic" : "architecture";
+    modelSyncDepth[model]++;
+    try {
+      return await Promise.all(getCallbackList(name).map(callback => callback({}, ...args)));
+    } finally {
+      modelSyncDepth[model]--;
     }
   }
 
@@ -58,12 +64,14 @@ window.simpleXflowEditor = (() => {
       deleteFile: async () => undefined,
       saveLogicRelay: async (xml) => {
         currentLogicXml = xml ?? "";
-        emit("saveLogic", xml);
+        await emit("saveLogic", xml);
         scheduleEditorChange(activeHostId, null, currentLogicXml);
       },
       openLogicRelay: async (xml) => {
         currentLogicXml = xml ?? "";
-        emit("openLogic", xml);
+        await emit("openLogic", xml);
+        delete getState(activeHostId).logicSize;
+        dispatchEditorResize();
       },
       adjustResourcesInLogicRelay: async (resources) => emit("adjustResourcesInLogic", resources),
       exportBPMN: async () => undefined,
@@ -128,11 +136,34 @@ window.simpleXflowEditor = (() => {
       });
     }
 
-    return bundlePromise;
+    const pendingBundle = bundlePromise;
+    return pendingBundle.catch((error) => {
+      if (bundlePromise === pendingBundle) {
+        document.querySelector(`script[src="${scriptUrl}"]`)?.remove();
+        bundlePromise = undefined;
+      }
+      throw error;
+    });
   }
 
   function dispatchEditorResize() {
-    window.requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+    window.requestAnimationFrame(() => {
+      for (const [name, modeler] of Object.entries(window.simpleXflowModelers ?? {})) {
+        const canvas = modeler.get("canvas");
+        const container = canvas.getContainer();
+        if (!container.clientWidth || !container.clientHeight) {
+          continue;
+        }
+        canvas.resized();
+        const state = getState(activeHostId);
+        const size = `${container.clientWidth}x${container.clientHeight}`;
+        if (state[`${name}Size`] !== size) {
+          canvas.zoom("fit-viewport");
+          state[`${name}Size`] = size;
+        }
+      }
+      window.dispatchEvent(new Event("resize"));
+    });
   }
 
   function getState(hostId) {
@@ -152,7 +183,31 @@ window.simpleXflowEditor = (() => {
 
   function shouldNotifyChanges(state) {
     return !!state?.dotNetReference
-      && (!state.suppressChangesUntil || window.performance.now() > state.suppressChangesUntil);
+      && !state.readOnly
+      && !state.loading
+      && (window.simpleXflowModelers?.architecture
+        ? !!state.dirty
+        : !state.suppressChangesUntil || window.performance.now() > state.suppressChangesUntil);
+  }
+
+  function getChangeVersion(hostId) {
+    return getState(hostId).changeVersion ?? 0;
+  }
+
+  function clearDirty(hostId, savedVersion) {
+    const state = getState(hostId);
+    if (getChangeVersion(hostId) !== savedVersion) return false;
+    state.dirty = false;
+    window.markAsClean?.();
+    return true;
+  }
+
+  function notifyEditorDirty(hostId) {
+    const state = getState(hostId);
+    state.dirty = true;
+    state.changeVersion = getChangeVersion(hostId) + 1;
+    state.dotNetReference?.invokeMethodAsync("NotifyEditorDirtyAsync", state.changeVersion)
+      .catch(error => console.warn("Could not notify Blazor about unsaved editor changes.", error));
   }
 
   function scheduleEditorChange(hostId, xml, logicXml) {
@@ -174,8 +229,26 @@ window.simpleXflowEditor = (() => {
     }
 
     window.clearTimeout(state.changeTimer);
-    state.changeTimer = window.setTimeout(() => {
+    state.changeTimer = window.setTimeout(async () => {
       if (!shouldNotifyChanges(state)) {
+        return;
+      }
+
+      if (window.simpleXflowModelers?.architecture) {
+        try {
+          const version = getChangeVersion(hostId);
+          const xml = await getXml();
+          const logicXml = await getLogic();
+          if (version !== getChangeVersion(hostId)) {
+            scheduleEditorChange(hostId);
+            return;
+          }
+          if (shouldNotifyChanges(state)) {
+            await state.dotNetReference.invokeMethodAsync("NotifyModelChangedAsync", xml, logicXml);
+          }
+        } catch (error) {
+          console.warn("Could not notify Blazor about a simpleXflow editor change.", error);
+        }
         return;
       }
 
@@ -206,6 +279,21 @@ window.simpleXflowEditor = (() => {
       }
     });
     state.downloadLinkObserver?.disconnect();
+    state.modelerListeners?.forEach(({ eventBus, listener }) => eventBus.off("commandStack.changed", listener));
+
+    if (window.simpleXflowModelers?.architecture) {
+      state.modelerListeners = Object.entries(window.simpleXflowModelers).map(([name, modeler]) => {
+        const eventBus = modeler.get("eventBus");
+        const listener = () => {
+          if (state.loading || state.readOnly || modelSyncDepth[name] > 0) return;
+          notifyEditorDirty(hostId);
+          scheduleEditorChange(hostId);
+        };
+        eventBus.on("commandStack.changed", listener);
+        return { eventBus, listener };
+      });
+      return;
+    }
 
     const host = document.getElementById(hostId);
     const downloadLink = document.getElementById("js-download-diagram");
@@ -312,8 +400,7 @@ window.simpleXflowEditor = (() => {
     currentArchitectureXml = xml;
 
     if (activeHostId) {
-      const state = editorStates.get(activeHostId) ?? {};
-      editorStates.set(activeHostId, { ...state, xml });
+      getState(activeHostId).xml = xml;
     }
   }
 
@@ -361,16 +448,30 @@ window.simpleXflowEditor = (() => {
 
   function openLogic(logicXml) {
     currentLogicXml = logicXml ?? "";
-
-    if (!currentLogicXml.trim()) {
-      return;
-    }
-
-    window.requestAnimationFrame(() => emit("openLogic", currentLogicXml));
+    // Reset the logic canvas when changing to a model without saved logic.
+    return emit("openLogic", currentLogicXml.trim() || defaultArchitectureXml);
   }
 
-  function replayOpenXml(editorXml, logicXml) {
+  async function replayOpenXml(editorXml, logicXml, logicTargetElementId) {
     const attemptId = ++openAttemptId;
+    document.getElementById("js-download-diagram")?.removeAttribute("href");
+    if (window.simpleXflowModelers?.architecture) {
+      await emit("openXmlFile", editorXml);
+      if (attemptId !== openAttemptId) {
+        return;
+      }
+      await openLogic(logicXml);
+      const modeler = window.simpleXflowModelers.architecture;
+      const target = logicTargetElementId && modeler.get("elementRegistry").get(logicTargetElementId);
+      if (target) {
+        modeler.get("selection").select(target);
+      }
+      const state = getState(activeHostId);
+      delete state.architectureSize;
+      delete state.logicSize;
+      dispatchEditorResize();
+      return;
+    }
     const open = () => {
       if (attemptId !== openAttemptId) {
         return;
@@ -421,11 +522,13 @@ window.simpleXflowEditor = (() => {
 
     return xml.replace(elementPattern, (_match, start, end) => {
       const withoutExistingLogic = start.replace(/\scontent=(?:"[^"]*"|'[^']*')/i, "");
-      return `${withoutExistingLogic} content="${escapedLogic}"${end}`;
+      const selfClosing = /\/\s*$/.test(withoutExistingLogic);
+      const openingTag = withoutExistingLogic.replace(/\/\s*$/, "").trimEnd();
+      return `${openingTag} content="${escapedLogic}"${selfClosing ? "/" : ""}${end}`;
     });
   }
 
-  async function initialize(hostId, xml, logicXml, logicTargetElementId) {
+  async function initialize(hostId, xml, logicXml, logicTargetElementId, dotNetReference) {
     await ensureBundle();
     const host = document.getElementById(hostId);
     if (!host) {
@@ -435,10 +538,13 @@ window.simpleXflowEditor = (() => {
     const editorXml = normalizeArchitectureXml(attachLogicToElement(xml, logicXml, logicTargetElementId));
     activeHostId = hostId;
     suppressChangeNotifications(hostId);
-    editorStates.set(hostId, { ...getState(hostId), xml: editorXml, logicXml, logicTargetElementId });
+    window.clearTimeout(getState(hostId).changeTimer);
+    Object.assign(getState(hostId), { xml: editorXml, logicXml, logicTargetElementId, loading: true, dirty: false, changeVersion: getChangeVersion(hostId) + 1 });
     rememberArchitectureXml(editorXml);
     await waitForCallback("openXmlFile", 2500);
-    replayOpenXml(editorXml, logicXml);
+    await replayOpenXml(editorXml, logicXml, logicTargetElementId);
+    getState(hostId).loading = false;
+    if (dotNetReference) watchChanges(hostId, dotNetReference);
     host.classList.add("is-ready");
     window.markAsClean?.();
   }
@@ -447,18 +553,34 @@ window.simpleXflowEditor = (() => {
     const editorXml = normalizeArchitectureXml(attachLogicToElement(xml, logicXml, logicTargetElementId));
     activeHostId = hostId;
     suppressChangeNotifications(hostId);
-    editorStates.set(hostId, { ...getState(hostId), xml: editorXml, logicXml, logicTargetElementId });
+    window.clearTimeout(getState(hostId).changeTimer);
+    Object.assign(getState(hostId), { xml: editorXml, logicXml, logicTargetElementId, loading: true, dirty: false, changeVersion: getChangeVersion(hostId) + 1 });
     rememberArchitectureXml(editorXml);
     await ensureBundle();
     await waitForCallback("openXmlFile", 2500);
-    replayOpenXml(editorXml, logicXml);
+    await replayOpenXml(editorXml, logicXml, logicTargetElementId);
+    getState(hostId).loading = false;
     window.markAsClean?.();
   }
 
   async function getXml() {
     await ensureBundle();
-    suppressChangeNotifications(activeHostId, 1600);
 
+    const modelers = window.simpleXflowModelers;
+    if (modelers?.architecture) {
+      // The download link is debounced. Explicit saves must include the live
+      // logic and architecture, including edits made immediately before export.
+      if (modelers.logic && currentLogicXml.trim()) {
+        const logic = await modelers.logic.saveXML({ format: true });
+        currentLogicXml = logic.xml;
+        await emit("saveLogic", logic.xml);
+      }
+      const { xml } = await modelers.architecture.saveXML({ format: true });
+      rememberArchitectureXml(xml);
+      return xml;
+    }
+
+    suppressChangeNotifications(activeHostId, 1600);
     const editorXml = getFallbackArchitectureXml();
     rememberArchitectureXml(editorXml);
     suppressChangeNotifications(activeHostId, 900);
@@ -484,8 +606,73 @@ window.simpleXflowEditor = (() => {
   function watchChanges(hostId, dotNetReference) {
     const state = getState(hostId);
     state.dotNetReference = dotNetReference;
-    suppressChangeNotifications(hostId, 1200);
-    window.requestAnimationFrame(() => installChangeObserver(hostId));
+    state.resizeObserver?.disconnect();
+    state.resizeObserver = new ResizeObserver(dispatchEditorResize);
+    for (const id of [hostId, "js-canvas", "js-simbpmncanvas"]) {
+      const element = document.getElementById(id);
+      if (element) state.resizeObserver.observe(element);
+    }
+    if (window.simpleXflowModelers?.architecture) {
+      installChangeObserver(hostId);
+    } else {
+      suppressChangeNotifications(hostId, 1200);
+      window.requestAnimationFrame(() => installChangeObserver(hostId));
+    }
+  }
+
+  function setReadOnly(hostId, readOnly) {
+    const state = getState(hostId);
+    state.readOnly = !!readOnly;
+    const host = document.getElementById(hostId);
+    if (!host) return;
+    host.classList.toggle("is-readonly", state.readOnly);
+    for (const [name, modeler] of Object.entries(window.simpleXflowModelers ?? {})) {
+      if (modeler.simpleXflowReadOnlyGuards) continue;
+      modeler.simpleXflowReadOnlyGuards = true;
+      const guards = [
+        [modeler.get("rules"), "allowed", false],
+        [modeler.get("directEditing"), "activate", false],
+        [modeler.get("commandStack"), "undo"],
+        [modeler.get("commandStack"), "redo"],
+        [modeler.get("commandStack"), "execute"]
+      ];
+      for (const [service, method, deniedResult] of guards) {
+        const original = service[method];
+        service[method] = function (...args) {
+          if (getState(hostId).readOnly && !(method === "execute" && modelSyncDepth[name] > 0)) {
+            return deniedResult;
+          }
+          return original.apply(this, args);
+        };
+      }
+    }
+    const updateControls = () => {
+      for (const element of host.querySelectorAll("#js-properties-panel input, #js-properties-panel textarea, #js-properties-panel select, #js-properties-panel [contenteditable]")) {
+        if (state.readOnly) {
+          if (!element.hasAttribute("data-simplexflow-disabled")) {
+            element.dataset.simplexflowDisabled = String(!!element.disabled);
+            element.dataset.simplexflowEditable = element.getAttribute("contenteditable") ?? "";
+          }
+          element.disabled = true;
+          if (element.hasAttribute("contenteditable")) element.setAttribute("contenteditable", "false");
+        } else if (element.hasAttribute("data-simplexflow-disabled")) {
+          element.disabled = element.dataset.simplexflowDisabled === "true";
+          if (element.dataset.simplexflowEditable) element.setAttribute("contenteditable", element.dataset.simplexflowEditable);
+          delete element.dataset.simplexflowDisabled;
+          delete element.dataset.simplexflowEditable;
+        }
+      }
+    };
+    state.readOnlyObserver?.disconnect();
+    state.readOnlyObserver = new MutationObserver(updateControls);
+    state.readOnlyObserver.observe(host, { childList: true, subtree: true });
+    updateControls();
+    if (!document.getElementById("simplexflow-readonly-style")) {
+      const style = document.createElement("style");
+      style.id = "simplexflow-readonly-style";
+      style.textContent = ".simplexflow-editor-host.is-readonly .djs-palette,.simplexflow-editor-host.is-readonly .djs-context-pad{display:none!important}";
+      document.head.appendChild(style);
+    }
   }
 
   function unwatchChanges(hostId) {
@@ -495,7 +682,10 @@ window.simpleXflowEditor = (() => {
 
     const state = editorStates.get(hostId);
     window.clearTimeout(state.changeTimer);
+    state.resizeObserver?.disconnect();
+    state.readOnlyObserver?.disconnect();
     state.downloadLinkObserver?.disconnect();
+    state.modelerListeners?.forEach(({ eventBus, listener }) => eventBus.off("commandStack.changed", listener));
     state.changeEventTargets?.forEach(({ target, listener }) => {
       for (const eventName of listener.eventNames) {
         target.removeEventListener(eventName, listener.handle, true);
@@ -503,6 +693,7 @@ window.simpleXflowEditor = (() => {
     });
     delete state.downloadLinkObserver;
     delete state.changeEventTargets;
+    delete state.modelerListeners;
     delete state.dotNetReference;
   }
 
@@ -523,8 +714,12 @@ window.simpleXflowEditor = (() => {
     openXml,
     getXml,
     getLogic,
+    getChangeVersion,
+    isDirty: hostId => !!getState(hostId).dirty,
+    clearDirty,
     resize,
     watchChanges,
+    setReadOnly,
     unwatchChanges
   };
 })();

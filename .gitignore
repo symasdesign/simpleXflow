@@ -8,6 +8,11 @@ artifacts/
 .dotnet/
 .nuget/
 .templateengine/
+node_modules/
+.npm-cache/
+TestResults/
+test-results/
+playwright-report/
 
 *.user
 *.suo

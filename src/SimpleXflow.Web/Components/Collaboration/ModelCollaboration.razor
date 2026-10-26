@@ -1,0 +1,239 @@
+@using SimpleXflow.Application.Projects
+@using SimpleXflow.Application.Workspaces
+@inject IFlowProjectService ProjectService
+@inject IWorkspaceService WorkspaceService
+
+<section class="collaboration-panel" aria-label="Collaboration and history">
+    @if (message is not null)
+    {
+        <p class="feedback" role="status">@message</p>
+    }
+    @if (Model is not null)
+    {
+        <div class="section-heading"><h2>Version history</h2><button class="text-button" disabled="@busy" @onclick="RefreshVersionsAsync">Refresh</button></div>
+        <p class="muted">Changes are saved with their author. Conflicting saves require a reload. Releases preserve a selected snapshot; planning a date does not publish it automatically.</p>
+        @if (Model.CanEdit)
+        {
+            <form class="compact-form" @onsubmit="CreateVersionAsync" @onsubmit:preventDefault>
+                <label>Version label<input class="form-control" @bind="versionLabel" maxlength="200" required placeholder="e.g. Review 1.0" /></label>
+                @if (Model.CanManage)
+                {
+                    <label>Planned release<input type="date" class="form-control" @bind="releaseDate" /></label>
+                }
+                <button class="secondary-action" disabled="@busy">Save version</button>
+            </form>
+        }
+        <div class="version-list">
+            @if (versions.Count == 0)
+            {
+                <p class="muted">No saved versions yet.</p>
+            }
+            @foreach (var version in versions)
+            {
+                <article class="version-row" @key="version.Id">
+                    <div class="version-heading"><strong>v@version.Number · @version.Label</strong>@if (version.ReleasedUtc.HasValue) { <span class="release-badge">Released</span> }</div>
+                    <small>@version.CreatedUtc.ToLocalTime().ToString("g") · @(version.CreatedBy ?? "Unknown author")</small>
+                    @if (version.PlannedReleaseUtc.HasValue)
+                    {
+                        <small>Planned for @version.PlannedReleaseUtc.Value.ToLocalTime().ToString("d")</small>
+                    }
+                    @if (version.ReleasedUtc.HasValue)
+                    {
+                        <small>Released @version.ReleasedUtc.Value.ToLocalTime().ToString("g") by @version.ReleasedBy</small>
+                    }
+                    @if (Model.CanManage)
+                    {
+                        <div class="row-actions">
+                            @if (!version.ReleasedUtc.HasValue)
+                            {
+                                <button class="text-button" disabled="@busy" @onclick="() => ReleaseAsync(version.Id)">Release version</button>
+                            }
+                            @if (restoreVersionId == version.Id)
+                            {
+                                <span class="muted">Replace the current model with this version?</span>
+                                <button class="text-button" disabled="@busy" @onclick="() => RestoreAsync(version.Id)">Confirm restore</button>
+                                <button class="text-button" @onclick="() => restoreVersionId = null">Cancel</button>
+                            }
+                            else
+                            {
+                                <button class="text-button" disabled="@busy" @onclick="() => restoreVersionId = version.Id">Restore</button>
+                            }
+                        </div>
+                    }
+                </article>
+            }
+        </div>
+    }
+    @if (Workspace is not null)
+    {
+        <div class="section-heading task-heading"><h2>Work packages</h2><span>@VisibleTasks.Count()</span></div>
+        <p class="muted">@(Model is null ? "Delegate work to workspace members and set delivery dates." : "Work packages linked to this model.")</p>
+        @if (CanManageWorkspace)
+        {
+            <form class="compact-form task-form" @onsubmit="SaveTaskAsync" @onsubmit:preventDefault>
+                <label class="full-width">Title<input class="form-control" @bind="taskTitle" required maxlength="240" placeholder="e.g. Review resource allocation" /></label>
+                <label class="full-width">Description<textarea class="form-control" @bind="taskDescription" rows="2" maxlength="4000"></textarea></label>
+                <label>Assigned to<select class="form-select" @bind="taskAssignee"><option value="">Unassigned</option>@foreach (var member in Workspace.Members) { <option value="@member.UserId">@member.Email</option> }</select></label>
+                <label>Delivery date<input type="date" class="form-control" @bind="taskDueDate" /></label>
+                <label>Status<select class="form-select" @bind="taskStatus"><option>Open</option><option>In progress</option><option>Done</option></select></label>
+                <button class="secondary-action" disabled="@busy">@(editingTaskId.HasValue ? "Save changes" : "Create work package")</button>
+                @if (editingTaskId.HasValue) { <button type="button" class="text-button" @onclick="ResetTask">Cancel</button> }
+            </form>
+        }
+        @if (!VisibleTasks.Any())
+        {
+            <p class="muted">No work packages yet.</p>
+        }
+        @foreach (var task in VisibleTasks)
+        {
+            <article class="task-row" @key="task.Id">
+                <div class="version-heading"><strong>@task.Title</strong><span class="status-badge">@task.Status</span></div>
+                @if (!string.IsNullOrWhiteSpace(task.Description)) { <p>@task.Description</p> }
+                <small>@(task.AssigneeEmail ?? "Unassigned")</small>
+                @if (task.DueUtc.HasValue) { <small class="@(IsOverdue(task) ? "overdue" : "")">Due @task.DueUtc.Value.ToLocalTime().ToString("d")</small> }
+                @if (Model is null && task.ModelId.HasValue) { <a class="text-button" href="@($"/projects/{task.ModelId}")">Open model</a> }
+                @if (CanManageWorkspace)
+                {
+                    <button class="text-button" disabled="@busy" @onclick="() => EditTask(task)">Edit work package</button>
+                }
+                else if (task.AssigneeUserId == currentUserId)
+                {
+                    <label>Status<select class="form-select" value="@task.Status" disabled="@busy" @onchange="e => UpdateStatusAsync(task, e.Value?.ToString())"><option>Open</option><option>In progress</option><option>Done</option></select></label>
+                }
+            </article>
+        }
+    }
+</section>
+
+@code {
+    [Parameter] public ProjectDetail? Model { get; set; }
+    [Parameter] public WorkspaceDetail? Workspace { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public Func<Task<bool>>? BeforeChange { get; set; }
+    private IReadOnlyList<ModelVersionSummary> versions = [];
+    private Guid? loadedModelId;
+    private Guid? loadedWorkspaceId;
+    private string? currentUserId;
+    private string? message;
+    private bool busy;
+    private string versionLabel = "";
+    private DateTime? releaseDate;
+    private Guid? restoreVersionId;
+    private Guid? editingTaskId;
+    private Guid? taskModelId;
+    private string taskTitle = "";
+    private string? taskDescription;
+    private string? taskAssignee;
+    private DateTime? taskDueDate;
+    private string taskStatus = "Open";
+    private bool CanManageWorkspace => Workspace?.Role is "Owner" or "Admin";
+    private IEnumerable<WorkPackageSummary> VisibleTasks => (Workspace?.WorkPackages ?? []).Where(task => Model is null || task.ModelId == Model.Id);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedModelId != Model?.Id)
+        {
+            loadedModelId = Model?.Id;
+            restoreVersionId = null;
+            versions = [];
+            ResetTask();
+            await LoadVersionsAsync();
+        }
+        if (Workspace is not null && loadedWorkspaceId != Workspace.Id)
+        {
+            loadedWorkspaceId = Workspace.Id;
+            currentUserId = (await WorkspaceService.GetOrganizationAsync()).CurrentUserId;
+            ResetTask();
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action, bool prepareChange = true)
+    {
+        if (busy) return;
+        busy = true;
+        message = null;
+        try
+        {
+            if (prepareChange && BeforeChange is not null && !await BeforeChange()) return;
+            await action();
+            await OnChanged.InvokeAsync();
+            await LoadVersionsAsync();
+        }
+        catch (Exception exception) { message = exception.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task LoadVersionsAsync()
+    {
+        if (Model is not null) versions = await ProjectService.GetVersionsAsync(Model.Id);
+    }
+
+    private Task RefreshVersionsAsync() => RunAsync(() => Task.CompletedTask, prepareChange: false);
+
+    private Task CreateVersionAsync() => RunAsync(async () =>
+    {
+        if (Model is null) return;
+        await ProjectService.CreateVersionAsync(Model.Id, versionLabel, Model.CanManage ? AsUtc(releaseDate) : null);
+        versionLabel = "";
+        releaseDate = null;
+        message = "Version saved from the latest server state.";
+    });
+
+    private Task ReleaseAsync(Guid versionId) => RunAsync(async () =>
+    {
+        if (Model is null) return;
+        await ProjectService.ReleaseVersionAsync(Model.Id, versionId);
+        message = "Version released.";
+    });
+
+    private Task RestoreAsync(Guid versionId) => RunAsync(async () =>
+    {
+        if (Model is null) return;
+        await ProjectService.RestoreVersionAsync(Model.Id, versionId, Model.Revision);
+        restoreVersionId = null;
+        message = "Version restored. The model has been reloaded.";
+    });
+
+    private Task SaveTaskAsync() => RunAsync(async () =>
+    {
+        if (Workspace is null) return;
+        var request = new WorkPackageRequest(taskTitle, string.IsNullOrEmpty(taskAssignee) ? null : taskAssignee, AsUtc(taskDueDate), taskStatus, taskModelId ?? Model?.Id, taskDescription);
+        if (editingTaskId is { } id) await WorkspaceService.UpdateWorkPackageAsync(Workspace.Id, id, request);
+        else await WorkspaceService.CreateWorkPackageAsync(Workspace.Id, request);
+        ResetTask();
+        message = "Work package saved.";
+    });
+
+    private Task UpdateStatusAsync(WorkPackageSummary task, string? status) => RunAsync(async () =>
+    {
+        if (Workspace is null) return;
+        await WorkspaceService.UpdateWorkPackageAsync(Workspace.Id, task.Id,
+            new WorkPackageRequest(task.Title, task.AssigneeUserId, task.DueUtc, status ?? task.Status, task.ModelId, task.Description));
+        message = "Work package status updated.";
+    });
+
+    private void EditTask(WorkPackageSummary task)
+    {
+        editingTaskId = task.Id;
+        taskModelId = task.ModelId;
+        taskTitle = task.Title;
+        taskDescription = task.Description;
+        taskAssignee = task.AssigneeUserId;
+        taskDueDate = task.DueUtc?.LocalDateTime.Date;
+        taskStatus = task.Status;
+    }
+
+    private void ResetTask()
+    {
+        editingTaskId = null;
+        taskModelId = Model?.Id;
+        taskTitle = "";
+        taskDescription = null;
+        taskAssignee = null;
+        taskDueDate = null;
+        taskStatus = "Open";
+    }
+
+    private static DateTimeOffset? AsUtc(DateTime? date) => date.HasValue ? new DateTimeOffset(DateTime.SpecifyKind(date.Value.Date, DateTimeKind.Local)).ToUniversalTime() : null;
+    private static bool IsOverdue(WorkPackageSummary task) => task.Status != "Done" && task.DueUtc?.LocalDateTime.Date < DateTime.Today;
+}

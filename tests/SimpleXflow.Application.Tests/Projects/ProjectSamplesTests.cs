@@ -1,7 +1,7 @@
 using System.Xml.Linq;
 using SimpleXflow.Application.Projects;
 
-namespace SimpleXflow.Infrastructure.Tests.Projects;
+namespace SimpleXflow.Application.Tests.Projects;
 
 public sealed class ProjectSamplesTests
 {
@@ -28,8 +28,9 @@ public sealed class ProjectSamplesTests
 
     [Theory]
     [MemberData(nameof(Samples))]
-    public void All_ContainsValidBpmnXml(ProjectSample sample)
+    public void All_ContainsValidBpmnXml(string sampleId)
     {
+        var sample = Assert.IsType<ProjectSample>(ProjectSamples.Find(sampleId));
         var document = XDocument.Parse(sample.BpmnXml);
         var root = Assert.IsType<XElement>(document.Root);
 
@@ -42,6 +43,53 @@ public sealed class ProjectSamplesTests
 
             AssertBpmnDocument(logicRoot);
         }
+    }
+
+    [Theory]
+    [MemberData(nameof(Samples))]
+    public void Find_ReturnsSampleIndependentOfIdCasing(string sampleId)
+    {
+        var expected = Assert.Single(ProjectSamples.All, sample => sample.Id == sampleId);
+
+        Assert.Same(expected, ProjectSamples.Find(sampleId));
+        Assert.Same(expected, ProjectSamples.Find(sampleId.ToUpperInvariant()));
+        Assert.Same(expected, ProjectSamples.Find(sampleId.ToLowerInvariant()));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("does-not-exist")]
+    [InlineData("paper-coffee")]
+    [InlineData(" paper-coffee-break ")]
+    public void Find_UnknownOrIncompleteIdReturnsNull(string? sampleId)
+    {
+        Assert.Null(ProjectSamples.Find(sampleId));
+    }
+
+    [Theory]
+    [MemberData(nameof(Samples))]
+    public void All_HasUsableCatalogMetadataAndCoherentLogicTarget(string sampleId)
+    {
+        var sample = Assert.IsType<ProjectSample>(ProjectSamples.Find(sampleId));
+
+        Assert.Matches("^[a-z0-9]+(?:-[a-z0-9]+)*$", sample.Id);
+        Assert.False(string.IsNullOrWhiteSpace(sample.Name));
+        Assert.False(string.IsNullOrWhiteSpace(sample.Description));
+        Assert.Equal(sample.Name.Trim(), sample.Name);
+
+        if (sample.LogicXml is null)
+        {
+            Assert.Null(sample.LogicTargetElementId);
+            return;
+        }
+
+        Assert.False(string.IsNullOrWhiteSpace(sample.LogicXml));
+        Assert.False(string.IsNullOrWhiteSpace(sample.LogicTargetElementId));
+        var architecture = XDocument.Parse(sample.BpmnXml);
+        var target = Assert.Single(architecture.Descendants(), element => element.Attribute("id")?.Value == sample.LogicTargetElementId);
+        Assert.Equal("task", target.Name.LocalName);
     }
 
     [Fact]
@@ -75,5 +123,5 @@ public sealed class ProjectSamplesTests
     }
 
     public static IEnumerable<object[]> Samples() =>
-        ProjectSamples.All.Select(sample => new object[] { sample });
+        ProjectSamples.All.Select(sample => new object[] { sample.Id });
 }
